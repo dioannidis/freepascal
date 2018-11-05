@@ -44,7 +44,8 @@ Type
        cpu_avr4,
        cpu_avr5,
        cpu_avr51,
-       cpu_avr6
+       cpu_avr6,
+       cpu_avrxmega3
       );
 
    tfputype =
@@ -201,7 +202,8 @@ Type
       ct_atmega325,
       ct_atmega169pa,
       ct_attiny261a,
-      ct_attiny25
+      ct_attiny25,
+      ct_atmega4808
      );
 
    tcontrollerdatatype = record
@@ -232,7 +234,7 @@ Const
      pocall_softfloat
    ];
 
-   cputypestr : array[tcputype] of string[5] = ('',
+   cputypestr : array[tcputype] of string[9] = ('',
      'AVR1',
      'AVR2',
      'AVR25',
@@ -242,7 +244,8 @@ Const
      'AVR4',
      'AVR5',
      'AVR51',
-     'AVR6'
+     'AVR6',
+     'AVRXMEGA3'
    );
 
    fputypestr : array[tfputype] of string[6] = (
@@ -424,6 +427,7 @@ Const
         ,(controllertypestr:'ATMEGA169PA'; controllerunitstr:'ATMEGA169PA'; cputype: cpu_avr5; fputype:fpu_soft; flashbase:0; flashsize:16384; srambase:256; sramsize:1024; eeprombase:0; eepromsize:512)
         ,(controllertypestr:'ATTINY261A'; controllerunitstr:'ATTINY261A'; cputype: cpu_avr25; fputype:fpu_soft; flashbase:0; flashsize:2048; srambase:96; sramsize:128; eeprombase:0; eepromsize:128)
         ,(controllertypestr:'ATTINY25'; controllerunitstr:'ATTINY25'; cputype: cpu_avr25; fputype:fpu_soft; flashbase:0; flashsize:2048; srambase:96; sramsize:128; eeprombase:0; eepromsize:128)
+        ,(controllertypestr:'ATMEGA4808'; controllerunitstr:'ATMEGA4808'; cputype: cpu_avrxmega3; fputype:fpu_soft; flashbase:0; flashsize:49152; srambase:10240; sramsize:6144; eeprombase:5120; eepromsize:256)
    );
 
    { Supported optimizations, only used for information }
@@ -466,7 +470,8 @@ Const
        { cpu_avr4  } [CPUAVR_HAS_MOVW,CPUAVR_HAS_LPMX,CPUAVR_HAS_MUL,CPUAVR_2_BYTE_PC],
        { cpu_avr5  } [CPUAVR_HAS_JMP_CALL,CPUAVR_HAS_MOVW,CPUAVR_HAS_LPMX,CPUAVR_HAS_MUL,CPUAVR_2_BYTE_PC],
        { cpu_avr51 } [CPUAVR_HAS_JMP_CALL,CPUAVR_HAS_MOVW,CPUAVR_HAS_LPMX,CPUAVR_HAS_MUL,CPUAVR_HAS_RAMPZ,CPUAVR_HAS_ELPM,CPUAVR_HAS_ELPMX,CPUAVR_2_BYTE_PC],
-       { cpu_avr6  } [CPUAVR_HAS_JMP_CALL,CPUAVR_HAS_MOVW,CPUAVR_HAS_LPMX,CPUAVR_HAS_MUL,CPUAVR_HAS_RAMPZ,CPUAVR_HAS_ELPM,CPUAVR_HAS_ELPMX,CPUAVR_3_BYTE_PC]
+       { cpu_avr6  } [CPUAVR_HAS_JMP_CALL,CPUAVR_HAS_MOVW,CPUAVR_HAS_LPMX,CPUAVR_HAS_MUL,CPUAVR_HAS_RAMPZ,CPUAVR_HAS_ELPM,CPUAVR_HAS_ELPMX,CPUAVR_3_BYTE_PC],
+       { cpu_avrx3 } [CPUAVR_HAS_JMP_CALL,CPUAVR_HAS_MOVW,CPUAVR_HAS_LPMX,CPUAVR_HAS_MUL,CPUAVR_2_BYTE_PC]
      );
 
 Implementation

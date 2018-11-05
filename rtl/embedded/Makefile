@@ -168,6 +168,7 @@ OS_TARGET:=$(word 5,$(FPC_COMPILERINFO))
 endif
 FULL_TARGET=$(CPU_TARGET)-$(OS_TARGET)
 FULL_SOURCE=$(CPU_SOURCE)-$(OS_SOURCE)
+SUBARCH_ABI_SUFFIX=
 ifeq ($(CPU_TARGET),armeb)
 ARCH=arm
 override FPCOPT+=-Cb
@@ -175,6 +176,7 @@ else
 ifeq ($(CPU_TARGET),armel)
 ARCH=arm
 override FPCOPT+=-CaEABI
+override ABI:=eabi
 else
 ARCH=$(CPU_TARGET)
 endif
@@ -184,12 +186,18 @@ ifeq ($(SUBARCH),)
 $(error When compiling for arm-embedded, a sub-architecture (e.g. SUBARCH=armv4t or SUBARCH=armv7m) must be defined)
 endif
 override FPCOPT+=-Cp$(SUBARCH)
+ifeq ($(ABI),)
+SUBARCH_ABI_SUFFIX=-$(SUBARCH)
+else
+SUBARCH_ABI_SUFFIX=-$(SUBARCH)-$(ABI)
+endif
 endif
 ifeq ($(FULL_TARGET),avr-embedded)
 ifeq ($(SUBARCH),)
 $(error When compiling for avr-embedded, a sub-architecture (e.g. SUBARCH=avr25 or SUBARCH=avr35) must be defined)
 endif
 override FPCOPT+=-Cp$(SUBARCH)
+SUBARCH_ABI_SUFFIX=-$(SUBARCH)
 endif
 ifeq ($(FULL_TARGET),mipsel-embedded)
 ifeq ($(SUBARCH),)
@@ -204,7 +212,7 @@ else
 ifneq ($(findstring $(OS_TARGET),$(LIMIT83fs)),)
 TARGETSUFFIX=$(OS_TARGET)
 else
-TARGETSUFFIX=$(FULL_TARGET)
+TARGETSUFFIX=$(FULL_TARGET)$(SUBARCH_ABI_SUFFIX)
 endif
 SOURCESUFFIX=$(FULL_SOURCE)
 endif
@@ -422,6 +430,10 @@ CPU_UNITS_DEFINED=1
 endif
 ifeq ($(SUBARCH),avr6)
 CPU_UNITS=atmega2561 atmega2560 avrsim
+CPU_UNITS_DEFINED=1
+endif
+ifeq ($(SUBARCH),avrxmega3)
+CPU_UNITS=atmega4808
 CPU_UNITS_DEFINED=1
 endif
 ifeq ($(CPU_UNITS_DEFINED),)
@@ -1970,9 +1982,9 @@ ZIPSOURCESUFFIX=.source
 ZIPEXAMPLESUFFIX=.examples
 ifdef CROSSCOMPILE
 ZIPSUFFIX=.$(SOURCESUFFIX)
-ZIPCROSSPREFIX=$(TARGETSUFFIX)-
+ZIPCROSSPREFIX=$(TARGETSUFFIX)
 else
-ZIPSUFFIX=.$(TARGETSUFFIX)
+ZIPSUFFIX=.$(TARGETSUFFIX)$(FILESUFFIX)
 ZIPCROSSPREFIX=
 endif
 endif
