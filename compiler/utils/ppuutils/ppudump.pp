@@ -1354,7 +1354,9 @@ const
          (mask:pi_calls_c_varargs;
          str:' calls function with C-style varargs '),
          (mask:pi_has_open_array_parameter;
-         str:' has open array parameter ')
+         str:' has open array parameter '),
+         (mask:pi_uses_threadvar;
+         str:' uses threadvars ')
   );
 var
   procinfooptions : tprocinfoflags;
@@ -2228,7 +2230,8 @@ type
 const
   piopt : array[low(timplprocoption)..high(timplprocoption)] of tpiopt=(
     (mask:pio_empty; str:'IsEmpty'),
-    (mask:pio_has_inlininginfo; str:'HasInliningInfo')
+    (mask:pio_has_inlininginfo; str:'HasInliningInfo'),
+    (mask:pio_inline_not_possible; str:'InlineNotPossible')
   );
 var
   i: timplprocoption;
@@ -2785,7 +2788,7 @@ begin
            begin
              def:=TPpuFieldDef.Create(ParentDef);
              readabstractvarsym('Field Variable symbol ',varoptions,TPpuVarDef(def));
-             writeln([space,'      Address : ',getaint]);
+             writeln([space,'      Address : ',getasizeint]);
              if vo_has_mangledname in varoptions then
                writeln([space,' Mangled name : ',getstring]);
            end;
