@@ -353,9 +353,12 @@ Works:
   - dispose, new
 - typecast byte(longword) -> value & $ff
 - typecast TJSFunction(func)
+- modeswitch OmitRTTI
+- debugger;
 
 ToDos:
 - do not rename property Date
+- cmd line param to set modeswitch
 - bug: DoIt(typeinfo(i))  where DoIt is in another unit and has TTypeInfo
 - bug:
   v:=a[0]  gives Local variable "a" is assigned but never used
@@ -928,13 +931,7 @@ const
      'valueOf'
     );
 
-const
-  ClassVarModifiersType = [vmClass,vmStatic];
-  LowJSNativeInt = MinSafeIntDouble;
-  HighJSNativeInt = MaxSafeIntDouble;
-  LowJSBoolean = false;
-  HighJSBoolean = true;
-Type
+type
 
   { EPas2JS }
 
@@ -946,6 +943,29 @@ Type
     Id: TMaxPrecInt;
     MsgType: TMessageType;
   end;
+
+type
+  TPasToJsPlatform = (
+    PlatformBrowser,
+    PlatformNodeJS
+    );
+  TPasToJsPlatforms = set of TPasToJsPlatform;
+const
+  PasToJsPlatformNames: array[TPasToJsPlatform] of string = (
+   'Browser',
+   'NodeJS'
+    );
+type
+  TPasToJsProcessor = (
+    ProcessorECMAScript5,
+    ProcessorECMAScript6
+    );
+  TPasToJsProcessors = set of TPasToJsProcessor;
+const
+  PasToJsProcessorNames: array[TPasToJsProcessor] of string = (
+   'ECMAScript5',
+   'ECMAScript6'
+    );
 
 //------------------------------------------------------------------------------
 // Pas2js built-in types
@@ -961,6 +981,13 @@ const
     'None',
     'JSValue'
     );
+
+const
+  ClassVarModifiersType = [vmClass,vmStatic];
+  LowJSNativeInt = MinSafeIntDouble;
+  HighJSNativeInt = MaxSafeIntDouble;
+  LowJSBoolean = false;
+  HighJSBoolean = true;
 
 //------------------------------------------------------------------------------
 // Element CustomData
@@ -1066,7 +1093,8 @@ const
     msNestedComment,
     msExternalClass,
     msArrayOperators,
-    msIgnoreAttributes];
+    msIgnoreAttributes,
+    msOmitRTTI];
 
   msAllPas2jsBoolSwitchesReadOnly = [
     bsLongStrings
@@ -1141,6 +1169,29 @@ const
     proMethodAddrAsPointer
     ];
 type
+  TPas2JSResolver = class;
+
+  { TPas2jsPasScanner }
+
+  TPas2jsPasScanner = class(TPascalScanner)
+  private
+    FCompilerVersion: string;
+    FResolver: TPas2JSResolver;
+    FTargetPlatform: TPasToJsPlatform;
+    FTargetProcessor: TPasToJsProcessor;
+  protected
+    function HandleInclude(const Param: String): TToken; override;
+  public
+    function ReadNonPascalTillEndToken(StopAtLineEnd: boolean): TToken;
+      override;
+    property CompilerVersion: string read FCompilerVersion write FCompilerVersion;
+    property Resolver: TPas2JSResolver read FResolver write FResolver;
+    property TargetPlatform: TPasToJsPlatform read FTargetPlatform write FTargetPlatform;
+    property TargetProcessor: TPasToJsProcessor read FTargetProcessor write FTargetProcessor;
+  end;
+
+  { TPas2JSResolver }
+
   TPas2JSResolver = class(TPasResolver)
   private
     FJSBaseTypes: array[TPas2jsBaseType] of TPasUnresolvedSymbolRef;
@@ -1151,7 +1202,7 @@ type
     procedure OnClearHashItem(Item, Dummy: pointer);
   protected
     FOverloadScopes: TFPList; // list of TPasIdentifierScope
-    function HasOverloadIndex(El: TPasElement): boolean; virtual;
+    function HasOverloadIndex(El: TPasElement; WithElevatedLocal: boolean = false): boolean; virtual;
     function GetOverloadIndex(Identifier: TPasIdentifier;
       StopAt: TPasElement): integer;
     function GetOverloadAt(Identifier: TPasIdentifier; var Index: integer): TPasIdentifier;
@@ -1212,8 +1263,11 @@ type
     procedure ComputeBinaryExprRes(Bin: TBinaryExpr; out
       ResolvedEl: TPasResolverResult; Flags: TPasResolverComputeFlags;
       var LeftResolved, RightResolved: TPasResolverResult); override;
+    // built-in functions
     procedure BI_TypeInfo_OnGetCallResult(Proc: TResElDataBuiltInProc;
       Params: TParamsExpr; out ResolvedEl: TPasResolverResult); override;
+    function BI_Debugger_OnGetCallCompatibility(Proc: TResElDataBuiltInProc;
+      Expr: TPasExpr; RaiseOnError: boolean): integer; virtual;
   public
     constructor Create; reintroduce;
     destructor Destroy; override;
@@ -1427,32 +1481,7 @@ const
     woCompactObjectLiterals,
     woCompactArguments];
 type
-
   TPas2JSIsElementUsedEvent = function(Sender: TObject; El: TPasElement): boolean of object;
-
-  TPasToJsPlatform = (
-    PlatformBrowser,
-    PlatformNodeJS
-    );
-  TPasToJsPlatforms = set of TPasToJsPlatform;
-const
-  PasToJsPlatformNames: array[TPasToJsPlatform] of string = (
-   'Browser',
-   'NodeJS'
-    );
-type
-  TPasToJsProcessor = (
-    ProcessorECMAScript5,
-    ProcessorECMAScript6
-    );
-  TPasToJsProcessors = set of TPasToJsProcessor;
-const
-  PasToJsProcessorNames: array[TPasToJsProcessor] of string = (
-   'ECMAScript5',
-   'ECMAScript6'
-    );
-
-type
   TJSReservedWordList = array of String;
 
   TRefPathKind = (
@@ -1723,6 +1752,7 @@ type
     Function ConvertBuiltIn_New(El: TParamsExpr; AContext: TConvertContext): TJSElement; virtual;
     Function ConvertBuiltIn_Dispose(El: TParamsExpr; AContext: TConvertContext): TJSElement; virtual;
     Function ConvertBuiltIn_Default(El: TParamsExpr; AContext: TConvertContext): TJSElement; virtual;
+    Function ConvertBuiltIn_Debugger(El: TPasExpr; AContext: TConvertContext): TJSElement; virtual;
     Function ConvertRecordValues(El: TRecordValues; AContext: TConvertContext): TJSElement; virtual;
     Function ConvertSelfExpression(El: TSelfExpr; AContext: TConvertContext): TJSElement; virtual;
     Function ConvertBinaryExpression(El: TBinaryExpr; AContext: TConvertContext): TJSElement; virtual;
@@ -1844,6 +1874,7 @@ const
   TempRefObjGetterName = 'get';
   TempRefObjSetterName = 'set';
   TempRefObjSetterArgName = 'v';
+  IdentChars = ['0'..'9', 'A'..'Z', 'a'..'z','_'];
 
 function CodePointToJSString(u: longword): TJSString;
 begin
@@ -2018,6 +2049,245 @@ begin
   Element:=TheEl;
 end;
 
+{ TPas2jsPasScanner }
+
+function TPas2jsPasScanner.HandleInclude(const Param: String): TToken;
+
+  procedure SetStr(const s: string);
+  begin
+    Result:=tkString;
+    SetCurTokenString(''''+s+'''');
+  end;
+
+var
+  Year, Month, Day, Hour, Minute, Second, MilliSecond: word;
+  i: Integer;
+  Scope: TPasScope;
+begin
+  if (Param<>'') and (Param[1]='%') then
+  begin
+    case lowercase(Param) of
+    '%date%':
+      begin
+        DecodeDate(Now,Year,Month,Day);
+        SetStr(IntToStr(Year)+'/'+IntToStr(Month)+'/'+IntToStr(Day));
+        exit;
+      end;
+    '%time%':
+      begin
+        DecodeTime(Now,Hour,Minute,Second,MilliSecond);
+        SetStr(Format('%2d:%2d:%2d',[Hour,Minute,Second]));
+        exit;
+      end;
+    '%pas2jstarget%','%fpctarget%',
+    '%pas2jstargetos%','%fpctargetos%':
+      begin
+        SetStr(PasToJsPlatformNames[TargetPlatform]);
+        exit;
+      end;
+    '%pas2jstargetcpu%','%fpctargetcpu%':
+      begin
+        SetStr(PasToJsProcessorNames[TargetProcessor]);
+        exit;
+      end;
+    '%pas2jsversion%','%fpcversion%':
+      begin
+        SetStr(CompilerVersion);
+        exit;
+      end;
+    '%line%':
+      begin
+        SetStr(IntToStr(CurRow));
+        exit;
+      end;
+    '%currentroutine%':
+      begin
+        if Resolver<>nil then
+          for i:=Resolver.ScopeCount-1 downto 0 do
+          begin
+            Scope:=Resolver.Scopes[i];
+            if (Scope.Element is TPasProcedure)
+                and (Scope.Element.Name<>'') then
+            begin
+              SetStr(Scope.Element.Name);
+              exit;
+            end;
+          end;
+        SetStr('<anonymous>');
+        exit;
+      end;
+    else
+      DoLog(mtWarning,nWarnIllegalCompilerDirectiveX,SWarnIllegalCompilerDirectiveX,
+        ['$i '+Param]);
+    end;
+  end;
+  Result:=inherited HandleInclude(Param);
+end;
+
+function TPas2jsPasScanner.ReadNonPascalTillEndToken(StopAtLineEnd: boolean
+  ): TToken;
+var
+  StartPos, MyTokenPos: integer;
+  s: string;
+  l: integer;
+
+  Procedure CommitTokenPos;
+  begin
+    {$IFDEF Pas2js}
+    TokenPos:=MyTokenPos;
+    {$ELSE}
+    TokenPos:=PChar(s)+MyTokenPos-1;
+    {$ENDIF}
+  end;
+
+  Procedure Add;
+  var
+    AddLen: PtrInt;
+  begin
+    AddLen:=MyTokenPos-StartPos;
+    if AddLen=0 then
+      SetCurTokenString('')
+    else
+      begin
+      SetCurTokenString(CurTokenString+copy(CurLine,StartPos,AddLen));
+      StartPos:=MyTokenPos;
+      end;
+  end;
+
+  function DoEndOfLine: boolean;
+  begin
+    Add;
+    if StopAtLineEnd then
+      begin
+      ReadNonPascalTillEndToken := tkLineEnding;
+      CommitTokenPos;
+      SetCurToken(tkLineEnding);
+      FetchLine;
+      exit(true);
+      end;
+    if not FetchLine then
+      begin
+      ReadNonPascalTillEndToken := tkEOF;
+      SetCurToken(tkEOF);
+      exit(true);
+      end;
+    s:=CurLine;
+    l:=length(s);
+    MyTokenPos:=1;
+    StartPos:=MyTokenPos;
+    Result:=false;
+  end;
+
+begin
+  SetCurTokenString('');
+  s:=CurLine;
+  l:=length(s);
+  {$IFDEF Pas2js}
+  MyTokenPos:=TokenPos;
+  {$ELSE}
+  {$IFDEF VerbosePas2JS}
+  if (TokenPos<PChar(s)) or (TokenPos>PChar(s)+length(s)) then
+    Error(nErrRangeCheck,'[20181109104812]');
+  {$ENDIF}
+  MyTokenPos:=TokenPos-PChar(s)+1;
+  {$ENDIF}
+  StartPos:=MyTokenPos;
+  repeat
+    if MyTokenPos>l then
+      if DoEndOfLine then exit;
+    case s[MyTokenPos] of
+    '''':
+      begin
+      inc(MyTokenPos);
+      repeat
+        if MyTokenPos>l then
+          Error(nErrOpenString,SErrOpenString);
+        case s[MyTokenPos] of
+        '''':
+          begin
+          inc(MyTokenPos);
+          break;
+          end;
+        #10,#13:
+          begin
+          // string literal missing closing apostroph
+          break;
+          end
+        else
+          inc(MyTokenPos);
+        end;
+      until false;
+      end;
+    '"':
+      begin
+      inc(MyTokenPos);
+      repeat
+        if MyTokenPos>l then
+          Error(nErrOpenString,SErrOpenString);
+        case s[MyTokenPos] of
+        '"':
+          begin
+          inc(MyTokenPos);
+          break;
+          end;
+        #10,#13:
+          begin
+          // string literal missing closing quote
+          break;
+          end
+        else
+          inc(MyTokenPos);
+        end;
+      until false;
+      end;
+    '/':
+      begin
+      inc(MyTokenPos);
+      if (MyTokenPos<=l) and (s[MyTokenPos]='/') then
+        begin
+        // skip Delphi comment //, see Note above
+        repeat
+          inc(MyTokenPos);
+        until (MyTokenPos>l) or (s[MyTokenPos] in [#10,#13]);
+        end;
+      end;
+    '0'..'9', 'A'..'Z', 'a'..'z','_':
+      begin
+      // number or identifier
+      if (CompareText(copy(s,MyTokenPos,3),'end')=0)
+          and ((MyTokenPos+3>l) or not (s[MyTokenPos+3] in IdentChars)) then
+        begin
+        // 'end' found
+        Add;
+        if CurTokenString<>'' then
+          begin
+          // return characters in front of 'end'
+          Result:=tkWhitespace;
+          CommitTokenPos;
+          SetCurToken(Result);
+          exit;
+          end;
+        // return 'end'
+        Result := tkend;
+        SetCurTokenString(copy(s,MyTokenPos,3));
+        inc(MyTokenPos,3);
+        CommitTokenPos;
+        SetCurToken(Result);
+        exit;
+        end
+      else
+        begin
+        // skip identifier
+        while (MyTokenPos<=l) and (s[MyTokenPos] in IdentChars) do
+          inc(MyTokenPos);
+        end;
+      end;
+    else
+      inc(MyTokenPos);
+    end;
+  until false;
+end;
+
 { TPas2JSResolver }
 
 // inline
@@ -2092,7 +2362,8 @@ begin
     end;
 end;
 
-function TPas2JSResolver.HasOverloadIndex(El: TPasElement): boolean;
+function TPas2JSResolver.HasOverloadIndex(El: TPasElement;
+  WithElevatedLocal: boolean): boolean;
 var
   C: TClass;
   ProcScope: TPasProcedureScope;
@@ -2102,7 +2373,7 @@ begin
     exit(false)
   else if C=TPasConst then
     begin
-    if El.Parent is TProcedureBody then
+    if (not WithElevatedLocal) and (El.Parent is TProcedureBody) then
       exit(false); // local const counted via TPas2JSSectionScope.FElevatedLocals
     end
   else if C=TPasClassType then
@@ -2138,11 +2409,8 @@ begin
     El:=Identifier.Element;
     Identifier:=Identifier.NextSameIdentifier;
     if El=StopAt then
-      begin
-      Result:=0;
-      continue;
-      end;
-    if HasOverloadIndex(El) then
+      Result:=0
+    else if HasOverloadIndex(El) then
       inc(Result);
     end;
 end;
@@ -2200,6 +2468,7 @@ var
   CurEl: TPasElement;
 begin
   Result:=0;
+  if not HasOverloadIndex(El,true) then exit;
   for i:=FOverloadScopes.Count-1 downto 0 do
     begin
     Scope:=TPasIdentifierScope(FOverloadScopes[i]);
@@ -3091,6 +3360,9 @@ var
   ptm: TProcTypeModifier;
   TypeEl, ElTypeEl: TPasType;
 begin
+  if El.Parent.Parent is TPasRecordType then
+    RaiseNotYetImplemented(20181107183603,El,'methods in records');
+
   inherited FinishProcedureType(El);
 
   if El is TPasFunctionType then
@@ -3964,6 +4236,16 @@ begin
   if Proc=nil then ;
 end;
 
+function TPas2JSResolver.BI_Debugger_OnGetCallCompatibility(
+  Proc: TResElDataBuiltInProc; Expr: TPasExpr; RaiseOnError: boolean): integer;
+// debugger;
+begin
+  if Expr is TParamsExpr then
+    Result:=CheckBuiltInMaxParamCount(Proc,TParamsExpr(Expr),0,RaiseOnError)
+  else
+    Result:=cExact;
+end;
+
 constructor TPas2JSResolver.Create;
 var
   bt: TPas2jsBaseType;
@@ -4054,6 +4336,9 @@ begin
     AddBaseType(Pas2JSBuiltInNames[pbitnUIntDouble],btUIntDouble);
   if btIntDouble in TheBaseTypes then
     AddBaseType(Pas2JSBuiltInNames[pbitnIntDouble],btIntDouble);
+  AddBuiltInProc('Debugger','procedure Debugger',
+      @BI_Debugger_OnGetCallCompatibility,nil,
+      nil,nil,bfCustom,[bipfCanBeStatement]);
 end;
 
 function TPas2JSResolver.CheckTypeCastRes(const FromResolved,
@@ -7017,6 +7302,12 @@ begin
       bfBreak: Result:=ConvertBuiltInBreak(El,AContext);
       bfContinue: Result:=ConvertBuiltInContinue(El,AContext);
       bfExit: Result:=ConvertBuiltIn_Exit(El,AContext);
+      bfCustom:
+        case BuiltInProc.Element.Name of
+        'Debugger': Result:=ConvertBuiltIn_Debugger(El,AContext);
+        else
+          RaiseNotSupported(El,AContext,20181126102554,'built in custom proc '+BuiltInProc.Element.Name);
+        end
     else
       RaiseNotSupported(El,AContext,20161130164955,'built in proc '+ResolverBuiltInProcNames[BuiltInProc.BuiltIn]);
     end;
@@ -8116,6 +8407,12 @@ begin
             if Result=nil then exit;
             end;
           bfDefault: Result:=ConvertBuiltIn_Default(El,AContext);
+          bfCustom:
+            case BuiltInProc.Element.Name of
+            'Debugger': Result:=ConvertBuiltIn_Debugger(El,AContext);
+            else
+              RaiseNotSupported(El,AContext,20181126101801,'built in custom proc '+BuiltInProc.Element.Name);
+            end;
         else
           RaiseNotSupported(El,AContext,20161130164955,'built in proc '+ResolverBuiltInProcNames[BuiltInProc.BuiltIn]);
         end;
@@ -10018,14 +10315,11 @@ end;
 function TPasToJSConverter.ConvertBuiltInStrParam(El: TPasExpr;
   AContext: TConvertContext; IsStrFunc, IsFirst: boolean): TJSElement;
 var
-  ResolvedEl: TPasResolverResult;
-  NeedStrLit: Boolean;
   Add: TJSElement;
-  Call: TJSCallExpression;
-  PlusEl: TJSAdditiveExpressionPlus;
-  Bracket: TJSBracketMemberExpression;
 
   procedure PrependStrLit;
+  var
+    PlusEl: TJSAdditiveExpressionPlus;
   begin
     PlusEl:=TJSAdditiveExpressionPlus(CreateElement(TJSAdditiveExpressionPlus,El));
     PlusEl.A:=CreateLiteralString(El,'');
@@ -10033,6 +10327,12 @@ var
     Add:=PlusEl;
   end;
 
+var
+  ResolvedEl: TPasResolverResult;
+  NeedStrLit: Boolean;
+  Call: TJSCallExpression;
+  Bracket: TJSBracketMemberExpression;
+  Arg: TJSElement;
 begin
   Result:=nil;
   AContext.Resolver.ComputeElement(El,ResolvedEl,[]);
@@ -10041,17 +10341,20 @@ begin
   Bracket:=nil;
   try
     NeedStrLit:=false;
-    if ResolvedEl.BaseType in (btAllJSBooleans+btAllJSInteger) then
+    if ResolvedEl.BaseType in (btAllJSBooleans+btAllJSInteger-[btCurrency]) then
       begin
       NeedStrLit:=true;
       Add:=ConvertElement(El,AContext);
       end
-    else if ResolvedEl.BaseType in btAllJSFloats then
+    else if ResolvedEl.BaseType in (btAllJSFloats+[btCurrency]) then
       begin
       // convert to rtl.floatToStr(El,width,precision)
       Call:=CreateCallExpression(El);
       Call.Expr:=CreateMemberExpression([FBuiltInNames[pbivnRTL],FBuiltInNames[pbifnFloatToStr]]);
-      Call.AddArg(ConvertElement(El,AContext));
+      Arg:=ConvertElement(El,AContext);
+      if ResolvedEl.BaseType=btCurrency then
+        Arg:=CreateDivideNumber(El,Arg,10000);
+      Call.AddArg(Arg);
       if El.format1<>nil then
         Call.AddArg(ConvertElement(El.format1,AContext));
       if El.format2<>nil then
@@ -10698,6 +11001,13 @@ begin
   {$ENDIF}
   DoError(20180501011723,nXExpectedButYFound,sXExpectedButYFound,['record',
     AContext.Resolver.GetResolverResultDescription(ResolvedEl)],Param);
+end;
+
+function TPasToJSConverter.ConvertBuiltIn_Debugger(El: TPasExpr;
+  AContext: TConvertContext): TJSElement;
+begin
+  Result:=CreateLiteralCustomValue(El,'debugger');
+  if AContext=nil then ;
 end;
 
 function TPasToJSConverter.ConvertRecordValues(El: TRecordValues;

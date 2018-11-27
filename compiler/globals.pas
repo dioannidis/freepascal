@@ -164,6 +164,8 @@ interface
 
          disabledircache : boolean;
 
+         tlsmodel : ttlsmodel;
+
 {$if defined(i8086)}
          x86memorymodel  : tx86memorymodel;
 {$endif defined(i8086)}
@@ -556,6 +558,8 @@ interface
         minfpconstprec : s32real;
 
         disabledircache : false;
+
+        tlsmodel : tlsm_none;
 {$if defined(i8086)}
         x86memorymodel : mm_small;
 {$endif defined(i8086)}
@@ -1420,7 +1424,7 @@ implementation
        if localexepath='' then
         begin
           hs1 := ExtractFileName(exeName);
-          ChangeFileExt(hs1,source_info.exeext);
+	  hs1 := ChangeFileExt(hs1,source_info.exeext);
 {$ifdef macos}
           FindFile(hs1,GetEnvironmentVariable('Commands'),false,localExepath);
 {$else macos}

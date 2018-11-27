@@ -27,7 +27,7 @@ uses
   Classes, SysUtils, fpcunit, testregistry, contnrs,
   jstree, jswriter, jsbase,
   PasTree, PScanner, PasResolver, PParser, PasResolveEval,
-  Pas2jsPParser, FPPas2Js;
+  FPPas2Js;
 
 const
   // default parser+scanner options
@@ -381,6 +381,7 @@ type
     Procedure TestCaseOfRange;
     Procedure TestCaseOfString;
     Procedure TestCaseOfExternalClassConst;
+    Procedure TestDebugger;
 
     // arrays
     Procedure TestArray_Dynamic;
@@ -520,6 +521,7 @@ type
     Procedure TestExternalClass_FunctionResultInTypeCast;
     Procedure TestExternalClass_NonExternalOverride;
     Procedure TestExternalClass_OverloadHint;
+    Procedure TestExternalClass_SameNamePublishedProperty;
     Procedure TestExternalClass_Property;
     Procedure TestExternalClass_ClassProperty;
     Procedure TestExternalClass_ClassOf;
@@ -677,6 +679,7 @@ type
     Procedure TestRTTI_Class_Property;
     Procedure TestRTTI_Class_PropertyParams;
     Procedure TestRTTI_Class_OtherUnit_TypeAlias;
+    Procedure TestRTTI_Class_OmitRTTI;
     Procedure TestRTTI_IndexModifier;
     Procedure TestRTTI_StoredModifier;
     Procedure TestRTTI_DefaultValue;
@@ -3317,6 +3320,14 @@ begin
   '  { a:{ b:{}, c:[]}, d:''1'' };',
   '  end;',
   '  asm console.log(); end;',
+  '  asm',
+  '    s = "'' ";',
+  '    s = ''" '';',
+  '    s = s + "world" + "''";',
+  '    // end',
+  '    s = ''end'';',
+  '    s = "end";',
+  '  end;',
   'end;',
   'begin']);
   ConvertProgram;
@@ -3326,6 +3337,12 @@ begin
     '  var Result = 0;',
     '  { a:{ b:{}, c:[]}, d:''1'' };',
     '  console.log();',
+    '  s = "'' ";',
+    '  s = ''" '';',
+    '  s = s + "world" + "''";',
+    '  // end',
+    '  s = ''end'';',
+    '  s = "end";',
     '  return Result;',
     '};'
     ]),
@@ -5602,6 +5619,8 @@ begin
   '  j:=c;',
   '  Write(c);',
   '  c:=default(currency);',
+  '  j:=str(c);',
+  '  j:=str(c:0:3);',
   '']);
   ConvertProgram;
   CheckSource('TestCurrency',
@@ -5669,6 +5688,8 @@ begin
     '$mod.j = $mod.c / 10000;',
     '$mod.Write($mod.c / 10000);',
     '$mod.c = 0;',
+    '$mod.j = rtl.floatToStr($mod.c / 10000);',
+    '$mod.j = rtl.floatToStr($mod.c / 10000, 0, 3);',
     '']));
 end;
 
@@ -7059,6 +7080,30 @@ begin
     '  $mod.vI = 3}',
     ' else if ($tmp1 === Bird.e) ;'
     ]));
+end;
+
+procedure TTestModule.TestDebugger;
+begin
+  StartProgram(false);
+  Add([
+  'procedure DoIt;',
+  'begin',
+  '  deBugger;',
+  '  DeBugger();',
+  'end;',
+  'begin',
+  '  Debugger;']);
+  ConvertProgram;
+  CheckSource('TestDebugger',
+    LinesToStr([ // statements
+    'this.DoIt = function () {',
+    '  debugger;',
+    '  debugger;',
+    '};',
+    '']),
+    LinesToStr([ // $mod.$main
+    'debugger;',
+    '']));
 end;
 
 procedure TTestModule.TestArray_Dynamic;
@@ -13340,6 +13385,43 @@ begin
     LinesToStr([ // statements
     '']),
     LinesToStr([ // $mod.$main
+    '']));
+end;
+
+procedure TTestModule.TestExternalClass_SameNamePublishedProperty;
+begin
+  StartProgram(false);
+  Add([
+  '{$modeswitch externalclass}',
+  'type',
+  '  JSwiper = class external name ''Swiper''',
+  '    constructor New;',
+  '  end;',
+  '  TObject = class',
+  '  private',
+  '    FSwiper: JSwiper;',
+  '  published',
+  '    property Swiper: JSwiper read FSwiper write FSwiper;',
+  '  end;',
+  'begin',
+  '  JSwiper.new;',
+  '']);
+  ConvertProgram;
+  CheckSource('TestExternalClass_SameNamePublishedProperty',
+    LinesToStr([ // statements
+    'rtl.createClass($mod, "TObject", null, function () {',
+    '  this.$init = function () {',
+    '    this.FSwiper = null;',
+    '  };',
+    '  this.$final = function () {',
+    '    this.FSwiper = undefined;',
+    '  };',
+    '  var $r = this.$rtti;',
+    '  $r.addProperty("Swiper", 0, $mod.$rtti["JSwiper"], "FSwiper", "FSwiper");',
+    '});',
+    '']),
+    LinesToStr([ // $mod.$main
+    'new Swiper();',
     '']));
 end;
 
@@ -20538,6 +20620,35 @@ begin
     '']));
 end;
 
+procedure TTestModule.TestRTTI_Class_OmitRTTI;
+begin
+  Converter.Options:=Converter.Options-[coNoTypeInfo];
+  StartProgram(false);
+  Add([
+  '{$modeswitch omitrtti}',
+  'type',
+  '  TObject = class',
+  '  private',
+  '    FA: byte;',
+  '  published',
+  '    property A: byte read FA write FA;',
+  '  end;',
+  'begin']);
+  ConvertProgram;
+  CheckSource('TestRTTI_Class_OmitRTTI',
+    LinesToStr([ // statements
+    'rtl.createClass($mod, "TObject", null, function () {',
+    '  this.$init = function () {',
+    '    this.FA = 0;',
+    '  };',
+    '  this.$final = function () {',
+    '  };',
+    '});',
+    '']),
+    LinesToStr([ // $mod.$main
+    '']));
+end;
+
 procedure TTestModule.TestRTTI_IndexModifier;
 begin
   Converter.Options:=Converter.Options-[coNoTypeInfo];
@@ -21283,15 +21394,16 @@ procedure TTestModule.TestRTTI_LocalTypes;
 begin
   Converter.Options:=Converter.Options-[coNoTypeInfo];
   StartProgram(false);
-  Add('procedure DoIt;');
-  Add('type');
-  Add('  integer = longint;');
-  Add('  TPoint = record');
-  Add('    x,y: integer;');
-  Add('  end;');
-  Add('begin');
-  Add('end;');
-  Add('begin');
+  Add([
+  'procedure DoIt;',
+  'type',
+  '  integer = longint;',
+  '  TPoint = record',
+  '    x,y: integer;',
+  '  end;',
+  'begin',
+  'end;',
+  'begin']);
   ConvertProgram;
   CheckSource('TestRTTI_LocalTypes',
     LinesToStr([ // statements
