@@ -3142,8 +3142,12 @@ implementation
                  end;
                *)
                templist.concat(tai_const.create_8bit(3));
-               //templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset));
+               {$ifdef avr}
+               // Add $800000 to indicate that the address is in memory space
+               templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset + $800000, aitconst_ptr_unaligned_d));
+               {$else}
                templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset, aitconst_ptr_unaligned_d));
+               {$endif}
                blocksize:=1+sizeof(puint_d);
             end;
           toasm :
