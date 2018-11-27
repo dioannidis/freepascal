@@ -48,6 +48,16 @@ interface
       DbgBase;
 
     type
+      {$ifdef avr}
+      puint_d = cardinal;
+      pint_d = longint;
+      //puint_d = PUint;
+      //pint_d = pint;
+      {$else avr}
+      puint_d = PUint;
+      pint_d = pint;
+      {$endif avr}
+
       { Tag names and codes.   }
       tdwarf_tag = (DW_TAG_padding := $00,DW_TAG_array_type := $01,
         DW_TAG_class_type := $02,DW_TAG_entry_point := $03,
@@ -396,11 +406,11 @@ interface
         procedure appenddef_procvar(list:TAsmList;def:tprocvardef);override;
         procedure appendprocdef(list:TAsmList;def:tprocdef);override;
 
-        function  get_symlist_sym_offset(symlist: ppropaccesslistitem; out sym: tabstractvarsym; out offset: pint): boolean;
+        function  get_symlist_sym_offset(symlist: ppropaccesslistitem; out sym: tabstractvarsym; out offset: pint_d): boolean;
         procedure appendsym_var(list:TAsmList;sym:tabstractnormalvarsym);
-        procedure appendsym_var_with_name_type_offset(list:TAsmList; sym:tabstractnormalvarsym; const name: string; def: tdef; offset: pint; const flags: tdwarfvarsymflags);
+        procedure appendsym_var_with_name_type_offset(list:TAsmList; sym:tabstractnormalvarsym; const name: string; def: tdef; offset: pint_d; const flags: tdwarfvarsymflags);
         { used for fields and properties mapped to fields }
-        procedure appendsym_fieldvar_with_name_offset(list:TAsmList;sym: tfieldvarsym;const name: string; def: tdef; offset: pint);
+        procedure appendsym_fieldvar_with_name_offset(list:TAsmList;sym: tfieldvarsym;const name: string; def: tdef; offset: pint_d);
         procedure appendsym_const_member(list:TAsmList;sym:tconstsym;ismember:boolean);
 
         procedure beforeappendsym(list:TAsmList;sym:tsym);override;
@@ -537,6 +547,13 @@ implementation
 
       { Implementation-defined range start.   }
       DW_LANG_hi_user = $ffff;
+
+      {$ifdef avr}
+      aitconst_ptr_unaligned_d = aitconst_32bit_unaligned;
+      //aitconst_ptr_unaligned_d = aitconst_ptr_unaligned;
+      {$else avr}
+      aitconst_ptr_unaligned_d = aitconst_ptr_unaligned;
+      {$endif avr}
 
     type
       { Names and codes for macro information.   }
@@ -1315,7 +1332,7 @@ implementation
       begin
         AddConstToAbbrev(ord(attr));
         AddConstToAbbrev(ord(DW_FORM_addr));
-        current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_type_sym(aitconst_ptr_unaligned,sym));
+        current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_type_sym(aitconst_ptr_unaligned_d,sym));
       end;
 
     procedure TDebugInfoDwarf.append_labelentry_addr_ref(attr : tdwarf_attribute;sym : tasmsymbol);
@@ -1325,7 +1342,7 @@ implementation
         { DW_FORM_ref_addr is treated as 32-bit by Open Watcom on i8086 }
         current_asmdata.asmlists[al_dwarf_info].concat(tai_const.Create_type_sym(aitconst_32bit_unaligned,sym));
 {$else i8086}
-        current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_type_sym(aitconst_ptr_unaligned,sym));
+        current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_type_sym(aitconst_ptr_unaligned_d,sym));
 {$endif i8086}
       end;
 
@@ -1831,8 +1848,8 @@ implementation
 
     procedure TDebugInfoDwarf.appenddef_array(list:TAsmList;def:tarraydef);
       var
-        size : PInt;
-        elesize : PInt;
+        size : pint_d;
+        elesize : pint_d;
         elestrideattr : tdwarf_attribute;
         labsym: tasmlabel;
       begin
@@ -2098,7 +2115,7 @@ implementation
             else
               current_asmdata.getaddrlabel(proc);
             append_entry(DW_TAG_structure_type,true,[
-              DW_AT_byte_size,DW_FORM_data1,2*sizeof(pint)
+              DW_AT_byte_size,DW_FORM_data1,2*sizeof(pint_d)
             ]);
             finish_entry;
 
@@ -2115,10 +2132,10 @@ implementation
             { self entry }
             append_entry(DW_TAG_member,false,[
               DW_AT_name,DW_FORM_string,'Self'#0,
-              DW_AT_data_member_location,DW_FORM_block1,1+lengthuleb128(sizeof(pint))
+              DW_AT_data_member_location,DW_FORM_block1,1+lengthuleb128(sizeof(pint_d))
               ]);
             current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_8bit(ord(DW_OP_plus_uconst)));
-            current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_uleb128bit(sizeof(pint)));
+            current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_uleb128bit(sizeof(pint_d)));
             append_labelentry_ref(DW_AT_type,def_dwarf_lab(class_tobject));
             finish_entry;
 
@@ -2264,7 +2281,7 @@ implementation
         procentry      : string;
         cc             : Tdwarf_calling_convention;
         st             : tsymtable;
-        vmtoffset      : pint;
+        vmtoffset      : pint_d;
         in_currentunit : boolean;
       begin
         { only write debug info for procedures defined in the current module,
@@ -2386,7 +2403,7 @@ implementation
             if not(target_info.system in systems_darwin) then
               begin
                 current_asmdata.asmlists[al_dwarf_aranges].Concat(
-                  tai_const.create_type_sym(aitconst_ptr_unaligned,current_asmdata.RefAsmSymbol(procentry,AT_FUNCTION)));
+                  tai_const.create_type_sym(aitconst_ptr_unaligned_d,current_asmdata.RefAsmSymbol(procentry,AT_FUNCTION)));
 {$ifdef i8086}
                 { bits 16..31 of the offset }
                 current_asmdata.asmlists[al_dwarf_aranges].concat(tai_const.Create_16bit_unaligned(0));
@@ -2394,7 +2411,7 @@ implementation
                 current_asmdata.asmlists[al_dwarf_aranges].concat(tai_const.Create_seg_name(procentry));
 {$endif i8086}
                 current_asmdata.asmlists[al_dwarf_aranges].Concat(
-                  tai_const.Create_rel_sym(aitconst_ptr_unaligned,current_asmdata.RefAsmSymbol(procentry,AT_FUNCTION),procendlabel));
+                  tai_const.Create_rel_sym(aitconst_ptr_unaligned_d,current_asmdata.RefAsmSymbol(procentry,AT_FUNCTION),procendlabel));
 {$ifdef i8086}
                 { bits 16..31 of length }
                 current_asmdata.asmlists[al_dwarf_aranges].concat(tai_const.Create_16bit_unaligned(0));
@@ -2445,9 +2462,9 @@ implementation
       end;
 
 
-    function TDebugInfoDwarf.get_symlist_sym_offset(symlist: ppropaccesslistitem; out sym: tabstractvarsym; out offset: pint): boolean;
+    function TDebugInfoDwarf.get_symlist_sym_offset(symlist: ppropaccesslistitem; out sym: tabstractvarsym; out offset: pint_d): boolean;
       var
-        elesize : pint;
+        elesize : pint_d;
         currdef : tdef;
         indirection: boolean;
       begin
@@ -2537,7 +2554,7 @@ implementation
       end;
 
 
-    procedure TDebugInfoDwarf.appendsym_var_with_name_type_offset(list:TAsmList; sym:tabstractnormalvarsym; const name: string; def: tdef; offset: pint; const flags: tdwarfvarsymflags);
+    procedure TDebugInfoDwarf.appendsym_var_with_name_type_offset(list:TAsmList; sym:tabstractnormalvarsym; const name: string; def: tdef; offset: pint_d; const flags: tdwarfvarsymflags);
       var
         templist : TAsmList;
         blocksize,size_of_int : longint;
@@ -2631,15 +2648,15 @@ implementation
 { This is only a minimal change to at least be able to get a value
   in only one thread is present PM 2014-11-21, like for stabs format }
                         templist.concat(tai_const.create_8bit(ord(DW_OP_addr)));
-                        templist.concat(tai_const.Create_type_name(aitconst_ptr_unaligned,sym.mangledname,
-                          offset+sizeof(pint)));
-                        blocksize:=1+sizeof(puint);
+                        templist.concat(tai_const.Create_type_name(aitconst_ptr_unaligned_d,sym.mangledname,
+                          offset+sizeof(pint_d)));
+                        blocksize:=1+sizeof(puint_d);
                       end
                     else
                       begin
                         templist.concat(tai_const.create_8bit(ord(DW_OP_addr)));
-                        templist.concat(tai_const.Create_type_name(aitconst_ptr_unaligned,sym.mangledname,offset));
-                        blocksize:=1+sizeof(puint);
+                        templist.concat(tai_const.Create_type_name(aitconst_ptr_unaligned_d,sym.mangledname,offset));
+                        blocksize:=1+sizeof(puint_d);
 {$ifdef i8086}
                         segment_sym_name:=sym.mangledname;
                         has_segment_sym_name:=true;
@@ -2819,7 +2836,7 @@ implementation
       end;
 
 
-    procedure TDebugInfoDwarf.appendsym_fieldvar_with_name_offset(list:TAsmList;sym: tfieldvarsym;const name: string; def: tdef; offset: pint);
+    procedure TDebugInfoDwarf.appendsym_fieldvar_with_name_offset(list:TAsmList;sym: tfieldvarsym;const name: string; def: tdef; offset: pint_d);
       var
         bitoffset,
         fieldoffset,
@@ -2855,7 +2872,7 @@ implementation
             { possible, i.e., equivalent to gcc's                    }
             { __attribute__((__packed__)), which is also what gpc    }
             { does.                                                  }
-            fieldnatsize:=max(sizeof(pint),sym.vardef.size);
+            fieldnatsize:=max(sizeof(pint_d),sym.vardef.size);
             fieldoffset:=(sym.fieldoffset div (fieldnatsize*8)) * fieldnatsize;
             inc(fieldoffset,offset);
             bitoffset:=sym.fieldoffset mod (fieldnatsize*8);
@@ -3066,7 +3083,7 @@ implementation
       var
         symlist: ppropaccesslistitem;
         tosym: tabstractvarsym;
-        offset: pint;
+        offset: pint_d;
       begin
         if assigned(sym.propaccesslist[palt_read]) and
            not assigned(sym.propaccesslist[palt_read].procdef) then
@@ -3109,7 +3126,7 @@ implementation
         blocksize : longint;
         symlist : ppropaccesslistitem;
         tosym: tabstractvarsym;
-        offset: pint;
+        offset: pint_d;
         flags: tdwarfvarsymflags;
       begin
         templist:=TAsmList.create;
@@ -3125,14 +3142,15 @@ implementation
                  end;
                *)
                templist.concat(tai_const.create_8bit(3));
-               templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset));
-               blocksize:=1+sizeof(puint);
+               //templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset));
+               templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset, aitconst_ptr_unaligned_d));
+               blocksize:=1+sizeof(puint_d);
             end;
           toasm :
             begin
               templist.concat(tai_const.create_8bit(3));
-              templist.concat(tai_const.create_type_name(aitconst_ptr_unaligned,sym.mangledname,0));
-              blocksize:=1+sizeof(puint);
+              templist.concat(tai_const.create_type_name(aitconst_ptr_unaligned_d,sym.mangledname,0));
+              blocksize:=1+sizeof(puint_d);
             end;
           tovar:
             begin
@@ -3435,7 +3453,7 @@ implementation
             { no alignment/padding bytes on i8086 for Open Watcom compatibility }
 {$else i8086}
             { address_size }
-            current_asmdata.asmlists[al_dwarf_aranges].concat(tai_const.create_8bit(sizeof(pint)));
+            current_asmdata.asmlists[al_dwarf_aranges].concat(tai_const.create_8bit(sizeof(pint_d)));
             { segment_size }
             current_asmdata.asmlists[al_dwarf_aranges].concat(tai_const.create_8bit(0));
             { alignment }
@@ -3467,7 +3485,7 @@ implementation
             current_asmdata.DefineAsmSymbol(target_asm.labelprefix+'debug_abbrev0',AB_LOCAL,AT_METADATA,voidpointertype)));
 
         { address size }
-        current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_8bit(sizeof(pint)));
+        current_asmdata.asmlists[al_dwarf_info].concat(tai_const.create_8bit(sizeof(pint_d)));
 
         if (ds_dwarf_cpp in current_settings.debugswitches) then
           lang:=DW_LANG_C_plus_plus
@@ -3796,9 +3814,9 @@ implementation
                        (target_asm.id=as_solaris_as) then
                       begin
                         asmline.concat(tai_const.create_8bit(DW_LNS_extended_op));
-                        asmline.concat(tai_const.create_uleb128bit(1+sizeof(pint)));
+                        asmline.concat(tai_const.create_uleb128bit(1+sizeof(pint_d)));
                         asmline.concat(tai_const.create_8bit(DW_LNE_set_address));
-                        asmline.concat(tai_const.create_type_sym(aitconst_ptr_unaligned,currlabel));
+                        asmline.concat(tai_const.create_type_sym(aitconst_ptr_unaligned_d,currlabel));
 {$ifdef i8086}
                         { on i8086 we also emit an Open Watcom-specific 'set segment' op }
                         asmline.concat(tai_const.create_8bit(DW_LNS_extended_op));
@@ -3868,9 +3886,9 @@ implementation
             current_asmdata.getlabel(currlabel, alt_dbgline);
             list.insertafter(tai_label.create(currlabel), hpend);
             asmline.concat(tai_const.create_8bit(DW_LNS_extended_op));
-            asmline.concat(tai_const.create_uleb128bit(1+sizeof(pint)));
+            asmline.concat(tai_const.create_uleb128bit(1+sizeof(pint_d)));
             asmline.concat(tai_const.create_8bit(DW_LNE_set_address));
-            asmline.concat(tai_const.create_type_sym(aitconst_ptr_unaligned,currlabel));
+            asmline.concat(tai_const.create_type_sym(aitconst_ptr_unaligned_d,currlabel));
           end;
 
         { end sequence }
@@ -3902,9 +3920,9 @@ implementation
         asmline.concat(tai_const.create_uleb128bit(get_file_index(infile)));
 
         asmline.concat(tai_const.create_8bit(DW_LNS_extended_op));
-        asmline.concat(tai_const.create_uleb128bit(1+sizeof(pint)));
+        asmline.concat(tai_const.create_uleb128bit(1+sizeof(pint_d)));
         asmline.concat(tai_const.create_8bit(DW_LNE_set_address));
-        asmline.concat(tai_const.create_type_sym(aitconst_ptr_unaligned,nil));
+        asmline.concat(tai_const.create_type_sym(aitconst_ptr_unaligned_d,nil));
         asmline.concat(tai_const.create_8bit(DW_LNS_extended_op));
         asmline.concat(tai_const.Create_8bit(1));
         asmline.concat(tai_const.Create_8bit(DW_LNE_end_sequence));
