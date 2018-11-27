@@ -322,3 +322,5 @@ function InterLockedExchangeAdd (var Target: smallint;Source : smallint) : small
     end;
   end;
 
+{include hand-optimized assembler code}
+{$i intmath.inc}
