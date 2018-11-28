@@ -3140,7 +3140,7 @@ implementation
                // Add $800000 to indicate that the address is in memory space
                templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset + $800000, aitconst_ptr_unaligned));
                {$else}
-               templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset, aitconst_ptr_unaligned));
+               templist.concat(tai_const.create_int_dataptr_unaligned(sym.addroffset));
                {$endif}
                blocksize:=1+sizeof(puint);
             end;

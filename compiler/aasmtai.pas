@@ -678,7 +678,9 @@ interface
           constructor Create_int_codeptr_unaligned(_value: int64);
           constructor Create_int_dataptr(_value: int64);
           constructor Create_int_dataptr_unaligned(_value: int64);
+{$ifdef avr}
           constructor Create_int_dataptr_unaligned(_value: int64; size: taiconst_type);
+{$endif avr}
 {$ifdef i8086}
           constructor Create_seg_name(const name:string);
           constructor Create_dgroup;
@@ -1897,30 +1899,26 @@ implementation
           consttype:=aitconst_farptr
         else
 {$endif i8086}
-          consttype:=aitconst_ptr_unaligned;
+        consttype:=aitconst_ptr_unaligned;
         sym:=nil;
         endsym:=nil;
         symofs:=0;
         value:=_value;
       end;
 
+{$ifdef avr}
     constructor tai_const.Create_int_dataptr_unaligned(_value: int64;
       size: taiconst_type);
       begin
         inherited Create;
         typ:=ait_const;
-{$ifdef i8086}
-        if current_settings.x86memorymodel in x86_far_data_models then
-          consttype:=aitconst_farptr
-        else
-{$endif i8086}
-          consttype:=size;
+        consttype:=size;
         sym:=nil;
         endsym:=nil;
         symofs:=0;
         value:=_value;
       end;
-
+{$endif avr}
 
 {$ifdef i8086}
     constructor tai_const.Create_seg_name(const name:string);
