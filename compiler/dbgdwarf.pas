@@ -1843,8 +1843,8 @@ implementation
 
     procedure TDebugInfoDwarf.appenddef_array(list:TAsmList;def:tarraydef);
       var
-        size : pint;
-        elesize : pint;
+        size : Pint;
+        elesize : Pint;
         elestrideattr : tdwarf_attribute;
         labsym: tasmlabel;
       begin
