@@ -545,9 +545,8 @@ implementation
       DW_LANG_hi_user = $ffff;
 
       {$ifdef avr}
+      // More space required to include memory type offset
       aitconst_ptr_unaligned = aitconst_32bit_unaligned;
-      //{$else avr}
-      //aitconst_ptr_unaligned_d = aitconst_ptr_unaligned;
       {$endif avr}
 
     type
