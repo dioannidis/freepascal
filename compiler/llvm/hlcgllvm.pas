@@ -47,6 +47,7 @@ uses
       procedure getcpuregister(list: TAsmList; r: Tregister); override;
       procedure ungetcpuregister(list: TAsmList; r: Tregister); override;
       procedure alloccpuregisters(list: TAsmList; rt: Tregistertype; const r: Tcpuregisterset); override;
+      procedure allocallcpuregisters(list: TAsmList); override;
       procedure deallocallcpuregisters(list: TAsmList); override;
 
       procedure a_bit_test_reg_reg_reg(list: TAsmList; bitnumbersize, valuesize, destsize: tdef; bitnumber, value, destreg: tregister); override;
@@ -86,6 +87,8 @@ uses
       procedure a_cmp_reg_reg_label(list: TAsmList; size: tdef; cmp_op: topcmp; reg1, reg2: tregister; l: tasmlabel); override;
 
       procedure a_jmp_always(list : TAsmList;l: tasmlabel); override;
+
+      procedure g_unreachable(list: TAsmList); override;
 
       procedure g_concatcopy(list : TAsmList;size: tdef; const source,dest : treference);override;
 
@@ -230,7 +233,7 @@ implementation
                    construction (the record is build from the paraloc
                    types) }
                  else if userecord then
-                   a_load_ref_reg(list,location^.def,location^.def,tmpref,location^.register)
+                   a_load_ref_reg(list,fielddef,location^.def,tmpref,location^.register)
                  { if the parameter is passed in a single paraloc, the
                    paraloc's type may be different from the declared type
                    -> use the original complete parameter size as source so
@@ -333,6 +336,12 @@ implementation
     end;
 
 
+  procedure thlcgllvm.allocallcpuregisters(list: TAsmList);
+    begin
+      { don't do anything }
+    end;
+
+
   procedure thlcgllvm.deallocallcpuregisters(list: TAsmList);
     begin
       { don't do anything }
@@ -425,6 +434,9 @@ implementation
     callparas:=tfplist.Create;
     for i:=0 to high(paras) do
       begin
+        { skip parameters without data }
+        if paras[i]^.isempty then
+          continue;
         paraloc:=paras[i]^.location;
         while assigned(paraloc) do
           begin
@@ -1095,6 +1107,11 @@ implementation
       cg.a_jmp_always(list,l);
     end;
 
+  procedure thlcgllvm.g_unreachable(list: TAsmList);
+    begin
+      list.Concat(taillvm.op_none(la_unreachable));
+    end;
+
 
   procedure thlcgllvm.g_concatcopy(list: TAsmList; size: tdef; const source, dest: treference);
     var
@@ -1381,7 +1398,7 @@ implementation
         internalerror(2015122504);
       current_asmdata.getjumplabel(hl);
       a_cmp_const_loc_label(list,llvmbool1type,OC_EQ,0,ovloc,hl);
-      g_call_system_proc(list,'fpc_overflow',[],nil);
+      g_call_system_proc(list,'fpc_overflow',[],nil).resetiftemp;
       a_label(list,hl);
     end;
 
@@ -1494,7 +1511,7 @@ implementation
                     exit;
                 end;
               if fromsize<>tosize then
-                g_ptrtypecast_ref(list,cpointerdef.create(fromsize),cpointerdef.create(tosize),href);
+                g_ptrtypecast_ref(list,cpointerdef.getreusable(fromsize),cpointerdef.getreusable(tosize),href);
               { %reg = load size* %ref }
               list.concat(taillvm.op_reg_size_ref(la_load,reg,cpointerdef.getreusable(tosize),href));
             end;
@@ -1607,8 +1624,12 @@ implementation
 
 
   procedure thlcgllvm.gen_load_loc_function_result(list: TAsmList; vardef: tdef; const l: tlocation);
+    var
+      retlocpara: tcgpara;
     begin
-      gen_load_loc_cgpara(list,vardef,l,get_call_result_cgpara(current_procinfo.procdef,nil));
+      retlocpara:=get_call_result_cgpara(current_procinfo.procdef,nil);
+      gen_load_loc_cgpara(list,vardef,l,retlocpara);
+      retlocpara.resetiftemp;
     end;
 
 
@@ -1786,7 +1807,7 @@ implementation
 
   function thlcgllvm.make_simple_ref(list: TAsmList; const ref: treference; def: tdef): treference;
     begin
-      result:=make_simple_ref_ptr(list,ref,cpointerdef.create(def));
+      result:=make_simple_ref_ptr(list,ref,cpointerdef.getreusable(def));
     end;
 
 

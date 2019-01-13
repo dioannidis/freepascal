@@ -1816,7 +1816,13 @@ implementation
                           cg.a_reg_sync(list,localloc.register);
                       LOC_REFERENCE :
                         begin
-                          if typ in [localvarsym,paravarsym] then
+                          { can't free the result, because we load it after
+                            this call into the function result location
+                            (gets freed in thlcgobj.gen_load_return_value();) }
+                          if (typ in [localvarsym,paravarsym]) and
+                             (([vo_is_funcret,vo_is_result]*varoptions)=[]) and
+                             ((current_procinfo.procdef.proctypeoption<>potype_constructor) or
+                              not(vo_is_self in varoptions)) then
                             tg.Ungetlocal(list,localloc.reference);
                         end;
                     end;

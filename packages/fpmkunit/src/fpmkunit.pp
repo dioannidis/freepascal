@@ -19,7 +19,7 @@ unit fpmkunit;
 {$Mode objfpc}
 {$H+}
 {$inline on}
-{$MODESWITCH TYPEHELPERS} 
+{$MODESWITCH TYPEHELPERS}
 
 { For target or cpu dependent dependencies also add an overload where you
   can pass only a set of cpus. This is disabled for now because it creates
@@ -158,7 +158,7 @@ Type
   TLogEvent = Procedure (Level : TVerboseLevel; Const Msg : String) of Object;
   TNotifyProcEvent = procedure(Sender: TObject);
 
-  TRunMode = (rmCompile,rmBuild,rmInstall,rmArchive,rmClean,rmDistClean,rmManifest,rmZipInstall,rmPkgList,rmUnInstall,rmInfo);
+  TRunMode = (rmCompile,rmBuild,rmInstall,rmBuildInstall,rmArchive,rmClean,rmDistClean,rmManifest,rmZipInstall,rmPkgList,rmUnInstall,rmInfo);
 
   TBuildMode = (bmOneByOne, bmBuildUnit{, bmSkipImplicitUnits});
   TBuildModes = set of TBuildMode;
@@ -215,7 +215,7 @@ Const
     { nds    }  ( false, false, false, false, false, false, true,  false, false, false, false, false, false, false, false, false,  false,  false),
     { embedded }( false, true,  true,  true,  true,  true,  true,  true,  true,  true , false, true,  false, true , false, false,  true ,  true ),
     { symbian } ( false, true,  false, false, false, false, true,  false, false, false, false, false, false, false, false, false,  false,  false),
-    { haiku }   ( false, true,  false, false, false, false, false, false, false, false, false, false, false, false, false, false,  false,  false),
+    { haiku }   ( false, true,  false, false, false, true,  false, false, false, false, false, false, false, false, false, false,  false,  false),
     { iphonesim}( false, true,  false, false, false, true,  false, false, false, false, false, false, false, false, false, false,  false,  false),
     { aix    }  ( false, false, false, true,  false, false, false, true,  false, false, false, false, false, false, false, false,  false,  false),
     { java }    ( false, false, false, false, false, false, false, false, false, false, false, false, true , false, false, false,  false,  false),
@@ -223,7 +223,7 @@ Const
     { nativent }( false, true,  false, false, false, false, false, false, false, false, false, false, false, false, false, false,  false,  false),
     { msdos }   ( false, false, false, false, false, false, false, false, false, false, false, false, false, true , false, false,  false,  false),
     { wii }     ( false, false, false, true , false, false, false, false, false, false, false, false, false, false, false, false,  false,  false),
-    { aros }    ( true,  false, false, false, false, false, true,  false, false, false, false, false, false, false, false, false,  false,  false),
+    { aros }    ( false, true,  false, false, false, false, true,  false, false, false, false, false, false, false, false, false,  false,  false),
     { dragonfly}( false, false, false, false, false, true,  false, false, false, false, false, false, false, false, false, false,  false,  false),
     { win16 }   ( false, false, false, false, false, false, false, false, false, false, false, false, false, true , false, false,  false,  false)
   );
@@ -890,6 +890,7 @@ Type
     Property SupportBuildModes: TBuildModes read FSupportBuildModes write FSupportBuildModes;
     Property BuildMode: TBuildMode read FBuildMode;
     Property Flags: TStrings read FFlags;
+    Property PackageVersion: TFPVersion read FVersion;
     // Options which are passed to the compiler for packages which depend on
     // this package.
     Property TransmitOptions: TStrings Read GetTransmitOptions Write SetTransmitOptions;
@@ -1288,7 +1289,7 @@ Type
     Procedure Usage(const FMT : String; Args : Array of const);
     Procedure Compile(Force : Boolean); virtual;
     Procedure Clean(AllTargets: boolean); virtual;
-    Procedure Install; virtual;
+    Procedure Install(ForceBuild : Boolean); virtual;
     Procedure UnInstall; virtual;
     Procedure ZipInstall; virtual;
     Procedure Archive; virtual;
@@ -1673,7 +1674,6 @@ ResourceString
   SWarnSkipPackageTargetProgress = '[%3.0f%%] Skipped package %s which has been disabled for target %s';
   SWarnSkipPackageTarget = 'Skipped package %s which has been disabled for target %s';
   SWarnInstallationPackagecomplete = 'Installation package %s for target %s succeeded';
-  SWarnCleanPackagecomplete = 'Clean of package %s completed';
   SWarnCanNotGetAccessRights = 'Warning: Failed to copy access-rights from file %s';
   SWarnCanNotSetAccessRights = 'Warning: Failed to copy access-rights to file %s';
   SWarnCanNotGetFileAge = 'Warning: Failed to get FileAge for %s';
@@ -1683,6 +1683,7 @@ ResourceString
   SWarngcclibpath         = 'Warning: Unable to determine the libgcc path.';
   SWarnNoFCLProcessSupport= 'No FCL-Process support';
   SWarnRetryRemDirectory     = 'Failed to remove directory "%s". Retry after a short delay';
+  SWarnRetryDeleteFile       = 'Failed to remove file "%s". Retry after a short delay';
   SWarnCombinedPathAndUDir= 'Warning: Better do not combine the SearchPath and Global/Local-UnitDir parameters';
   SWarnRemovedNonEmptyDirectory = 'Warning: Removed non empty directory "%s"';
 
@@ -1694,6 +1695,7 @@ ResourceString
   SInfoUnInstallingPackage= 'Uninstalling package %s';
   SInfoArchivingPackage   = 'Archiving package %s in "%s"';
   SInfoCleaningPackage    = 'Cleaning package %s';
+  SInfoCleanPackagecomplete = 'Clean of package %s completed';
   SInfoManifestPackage    = 'Creating manifest for package %s';
   SInfoPkgListPackage    = 'Adding package %s to the package list';
   SInfoCopyingFile        = 'Copying file "%s" to "%s"';
@@ -1752,7 +1754,7 @@ ResourceString
   SDbgDeletedFile           = 'Recursively deleted file "%s"';
   SDbgRemovedDirectory      = 'Recursively removed directory "%s"';
   SDbgUnregisteredResource  = 'Adding resource file "%s", which is not registered.';
-
+  SDbgSearchingDir          = 'Searching dir  %s.';
 
   // Help messages for usage
   SValue              = 'Value';
@@ -1761,8 +1763,10 @@ ResourceString
   SHelpCompile        = 'Compile all units in the package(s).';
   SHelpBuild          = 'Build all units in the package(s).';
   SHelpInstall        = 'Install all units in the package(s).';
+  SHelpBuildInstall   = 'Build and install all units in the package(s).';
   SHelpUnInstall      = 'Uninstall the package(s).';
-  SHelpClean          = 'Clean (remove) all units in the package(s).';
+  SHelpClean          = 'Clean (remove) all generated files in the package(s) for current CPU-OS target.';
+  SHelpDistclean      = 'Clean (remove) all generated files in the package(s) for all targets.';
   SHelpArchive        = 'Create archive (zip) with all units in the package(s).';
   SHelpHelp           = 'This message.';
   SHelpManifest       = 'Create a manifest suitable for import in repository.';
@@ -1784,6 +1788,7 @@ ResourceString
   SHelpConfig         = 'Use indicated config file when compiling.';
   SHelpOptions        = 'Pass extra options to the compiler.';
   SHelpVerbose        = 'Be verbose when working.';
+  SHelpDebug          = 'Add debug information when working.';
   SHelpInteractive    = 'Allow to interact with child processes';
   SHelpInstExamples   = 'Install the example-sources.';
   SHelpSkipCrossProgs = 'Skip programs when cross-compiling/installing';
@@ -2537,7 +2542,8 @@ procedure SearchFiles(AFileName, ASearchPathPrefix: string; Recursive: boolean; 
   var
     Info : TSearchRec;
   begin
-    Writeln('Searching ',Searchdir);
+    if assigned(Installer) then
+      Installer.Log(VlDebug,Format(SDbgSearchingDir,[SearchDir]));
     if FindFirst(SearchDir+AllFilesMask,faAnyFile and faDirectory,Info)=0 then
     begin
       repeat
@@ -3738,6 +3744,7 @@ begin
   OB:=IncludeTrailingPathDelimiter(GetBinOutputDir(ACPU,AOS));
   OU:=IncludeTrailingPathDelimiter(GetUnitsOutputDir(ACPU,AOS));
   List.Add(GetUnitConfigOutputFilename(Defaults.CPU,Defaults.OS));
+  List.Add(ManifestFile);
   AddConditionalStrings(Self, List,CleanFiles,ACPU,AOS);
   For I:=0 to FTargets.Count-1 do
     FTargets.TargetItems[I].GetCleanFiles(List, OU, OB, ACPU, AOS);
@@ -4364,7 +4371,7 @@ begin
   else If UnixPaths then
     Result:=Prefix+'share'+PathDelim+'doc'+PathDelim+'fpc-$(CompilerVersion)'+PathDelim+'$(PackageName)'
   else
-    Result:=BaseInstallDir+'docs'+PathDelim+'$(PackageName)';
+    Result:=BaseInstallDir+'doc'+PathDelim+'$(PackageName)';
 end;
 
 
@@ -5191,6 +5198,8 @@ begin
       FRunMode:=rmBuild
     else if CheckCommand(I,'i','install') then
       FRunMode:=rmInstall
+    else if CheckCommand(I,'bi','buildinstall') then
+      FRunMode:=rmBuildInstall
     else if CheckCommand(I,'zi','zipinstall') then
       FRunMode:=rmZipInstall
     else if CheckCommand(I,'c','clean') then
@@ -5287,7 +5296,7 @@ begin
       Defaults.BuildMode:=bmBuildUnit
     else if CheckOption(I,'io','ignoreinvalidoption', true) then
       Defaults.IgnoreInvalidOptions:=true
-    else if CheckOption(I,'d','doc-folder') then
+    else if CheckOption(I,'df','doc-folder') then
       Defaults.FPDocOutputDir:=OptionArg(I)
     else if CheckOption(I,'fsp','fpunitsrcpath') then
       Defaults.FPUnitSourcePath:=OptionArg(I)
@@ -5341,8 +5350,10 @@ begin
   LogCmd('compile',SHelpCompile);
   LogCmd('build',SHelpBuild);
   LogCmd('install',SHelpInstall);
+  LogCmd('buildinstall',SHelpBuildInstall);
   LogCmd('uninstall',SHelpUnInstall);
   LogCmd('clean',SHelpClean);
+  LogCmd('distclean',SHelpDistclean);
   LogCmd('archive',SHelpArchive);
   LogCmd('manifest',SHelpManifest);
   LogCmd('zipinstall',SHelpZipInstall);
@@ -5352,6 +5363,7 @@ begin
   LogOption('l','list-commands',SHelpList);
   LogOption('n','nofpccfg',SHelpNoFPCCfg);
   LogOption('v','verbose',SHelpVerbose);
+  LogOption('d','debug',SHelpDebug);
   LogOption('I','interactive',SHelpInteractive);
 {$ifdef HAS_UNIT_PROCESS}
   LogOption('e', 'useenv', sHelpUseEnvironment);
@@ -5374,7 +5386,7 @@ begin
   LogArgOption('r','compiler',SHelpCompiler);
   LogArgOption('f','config',SHelpConfig);
   LogArgOption('o','options',SHelpOptions);
-  LogArgOption('d', 'doc-folder', sHelpFpdocOutputDir);
+  LogArgOption('df', 'doc-folder', sHelpFpdocOutputDir);
   LogArgOption('fsp', 'fpunitsrcpath', sHelpFPUnitSrcPath);
   LogArgOption('zp', 'zipprefix', sHelpZipPrefix);
 {$ifndef NO_THREADING}
@@ -5436,9 +5448,10 @@ begin
 end;
 
 
-procedure TCustomInstaller.Install;
+procedure TCustomInstaller.Install(ForceBuild : Boolean);
 begin
   NotifyEventCollection.CallEvents(neaBeforeInstall, self);
+  BuildEngine.ForceCompile := ForceBuild;
   BuildEngine.Install(Packages);
   NotifyEventCollection.CallEvents(neaAfterInstall, self);
 end;
@@ -5512,7 +5525,8 @@ begin
     Case RunMode of
       rmCompile : Compile(False);
       rmBuild   : Compile(True);
-      rmInstall : Install;
+      rmInstall : Install(False);
+      rmBuildInstall: Install(True);
       rmZipInstall : ZipInstall;
       rmArchive : Archive;
       rmClean    : Clean(False);
@@ -5824,13 +5838,27 @@ end;
 
 
 procedure TBuildEngine.SysDeleteFile(Const AFileName : String);
+var retries : integer;
+    res : boolean;
 begin
   if not FileExists(AFileName) then
     Log(vldebug,SDbgFileDoesNotExist,[AFileName])
-  else If Not SysUtils.DeleteFile(AFileName) then
-    Error(SErrDeletingFile,[AFileName])
   else
-    Log(vlInfo,SInfoDeletedFile,[AFileName]);
+    begin
+      retries := 2;
+      res := SysUtils.DeleteFile(AFileName);
+      while not res and (retries>0) do
+        begin
+           log(vlWarning, SWarnRetryDeleteFile, [AFileName]);
+           sleep(5000);
+           dec(retries);
+           res := SysUtils.DeleteFile(AFileName);
+        end;
+     if not res then
+       Error(SErrDeletingFile,[AFileName])
+     else
+       Log(vlInfo,SInfoDeletedFile,[AFileName]);
+   end;
 end;
 
 procedure TBuildEngine.SysDeleteDirectory(Const ADirectoryName: String);
@@ -7935,14 +7963,20 @@ var
   AOS: TOS;
   DirectoryList : TStringList;
 begin
+  if not AllTargets and (not(Defaults.OS in APackage.OSes) or
+     not (Defaults.CPU in APackage.CPUs))  then
+    exit;
   Log(vlInfo,SInfoCleaningPackage,[APackage.Name]);
   try
     If (APackage.Directory<>'') then
       EnterDir(APackage.Directory);
     // Check for inherited options (packagevariants) from other packages
-    ResolveDependencies(APackage.Dependencies, (APackage.Collection as TPackages));
-    CheckDependencies(APackage, False);
-    APackage.SetDefaultPackageVariant;
+    if (Defaults.OS in APackage.OSes) and (Defaults.CPU in APackage.CPUs) then
+      begin
+        ResolveDependencies(APackage.Dependencies, (APackage.Collection as TPackages));
+        CheckDependencies(APackage, False);
+        APackage.SetDefaultPackageVariant;
+      end;
     DoBeforeClean(Apackage);
     AddPackageMacrosToDictionary(APackage, APackage.Dictionary);
     if AllTargets then
@@ -7954,7 +7988,8 @@ begin
           for ACPU:=low(TCpu) to high(TCpu) do if ACPU<>cpuNone then
             for AOS:=low(TOS) to high(TOS) do if AOS<>osNone then
               begin
-                if OSCPUSupported[AOS,ACPU] then
+                if OSCPUSupported[AOS,ACPU] and (AOS in APackage.OSes) and
+                   (ACPU in APackage.CPUs) then
                   begin
                     // First perform a normal clean, to be sure that all files
                     // which are not in the units- or bin-dir are cleaned. (like
@@ -7973,6 +8008,7 @@ begin
       Clean(APackage, Defaults.CPU, Defaults.OS);
     DoAfterClean(Apackage);
   Finally
+    log(vlInfo, SInfoCleanPackagecomplete, [APackage.Name]);
     If (APackage.Directory<>'') then
       EnterDir('');
   end;
@@ -7982,6 +8018,8 @@ procedure TBuildEngine.Clean(APackage: TPackage; ACPU: TCPU; AOS: TOS);
 Var
   List : TStringList;
   DirectoryList : TStringList;
+  RemainingList : TStrings;
+  i : longint;
 begin
   List:=TStringList.Create;
   try
@@ -8010,6 +8048,11 @@ begin
           begin
             Installer.Log(vlWarning,Format(SWarnRemovedNonEmptyDirectory,[APackage.Directory+APackage.GetBinOutputDir(ACPU,AOS)]));
             DirectoryList.Add(APackage.GetBinOutputDir(ACPU,AOS));
+            RemainingList := TStringList.Create;
+            SearchFiles(AllFilesMask, APackage.GetBinOutputDir(ACPU,AOS), true, RemainingList);
+            for i:=0 to RemainingList.Count-1 do
+              Installer.log(vlDebug,format('File %s still present',[RemainingList[i]]));
+            RemainingList.Free;
             CmdRemoveTrees(DirectoryList);
             DirectoryList.Clear;
           end;
@@ -8018,6 +8061,11 @@ begin
           begin
             Installer.Log(vlWarning,Format(SWarnRemovedNonEmptyDirectory,[APackage.Directory+APackage.GetUnitsOutputDir(ACPU,AOS)]));
             DirectoryList.Add(APackage.GetUnitsOutputDir(ACPU,AOS));
+            RemainingList := TStringList.Create;
+            SearchFiles(AllFilesMask, APackage.GetUnitsOutputDir(ACPU,AOS), true, RemainingList);
+            for i:=0 to RemainingList.Count-1 do
+              Installer.log(vlDebug,format('File %s still present',[RemainingList[i]]));
+            RemainingList.Free;
             CmdRemoveTrees(DirectoryList);
             DirectoryList.Clear;
           end;
@@ -8372,7 +8420,6 @@ begin
       P:=Packages.PackageItems[i];
       If AllTargets or PackageOK(P) then
         Clean(P, AllTargets);
-      log(vlWarning, SWarnCleanPackagecomplete, [P.Name]);
     end;
   NotifyEventCollection.CallEvents(neaAfterClean, Self);
 end;
