@@ -355,8 +355,8 @@ Var
 begin
   Result:=Length(S)*SizeOf(TJSWriterChar);
   if Result=0 then exit;
-  MinLen:=Result+FBufPos;
-  If (MinLen>Capacity) then
+  MinLen:=Result+integer(FBufPos);
+  If (MinLen>integer(Capacity)) then
     begin
     DesLen:=(FCapacity*3) div 2;
     if DesLen>MinLen then
@@ -364,7 +364,7 @@ begin
     Capacity:=MinLen;
     end;
   Move(S[1],FBuffer[FBufPos],Result);
-  FBufPos:=FBufPos+Result;
+  FBufPos:=integer(FBufPos)+Result;
 end;
 {$endif}
 
@@ -377,8 +377,8 @@ Var
 begin
   Result:=Length(S)*SizeOf(UnicodeChar);
   if Result=0 then exit;
-  MinLen:=Result+FBufPos;
-  If (MinLen>Capacity) then
+  MinLen:=Result+integer(FBufPos);
+  If (MinLen>integer(Capacity)) then
     begin
     DesLen:=(FCapacity*3) div 2;
     if DesLen>MinLen then
@@ -386,7 +386,7 @@ begin
     Capacity:=MinLen;
     end;
   Move(S[1],FBuffer[FBufPos],Result);
-  FBufPos:=FBufPos+Result;
+  FBufPos:=integer(FBufPos)+Result;
 end;
 {$endif}
 
@@ -470,6 +470,7 @@ Var
   S : String;
 
 begin
+  //system.writeln('TJSWriter.Write unicodestring=',U);
   WriteIndent;
   if UseUTF8 then
     begin
@@ -488,6 +489,7 @@ end;
 
 procedure TJSWriter.Write(const S: TJSWriterString);
 begin
+  //system.writeln('TJSWriter.Write TJSWriterString=',S);
   {$ifdef FPC_HAS_CPSTRING}
   if Not (woUseUTF8 in Options) then
     Write(UnicodeString(S))
@@ -1255,6 +1257,7 @@ procedure TJSWriter.WriteBinary(El: TJSBinary);
 Var
   S : String;
   AllowCompact, WithBrackets: Boolean;
+  ElC: TClass;
 begin
   {$IFDEF VerboseJSWriter}
   System.writeln('TJSWriter.WriteBinary SkipRoundBrackets=',FSkipRoundBrackets);
@@ -1263,6 +1266,18 @@ begin
   if WithBrackets then
     Write('(');
   FSkipRoundBrackets:=false;
+  ElC:=El.ClassType;
+  if El.A is TJSBinaryExpression then
+    if (El.A.ClassType=ElC)
+        and ((ElC=TJSLogicalOrExpression)
+        or (ElC=TJSLogicalAndExpression)
+        or (ElC=TJSBitwiseAndExpression)
+        or (ElC=TJSBitwiseOrExpression)
+        or (ElC=TJSBitwiseXOrExpression)
+        or (ElC=TJSAdditiveExpressionPlus)
+        or (ElC=TJSAdditiveExpressionMinus)
+        or (ElC=TJSMultiplicativeExpressionMul)) then
+      FSkipRoundBrackets:=true;
   WriteJS(El.A);
   Writer.CurElement:=El;
   AllowCompact:=False;
@@ -1279,6 +1294,13 @@ begin
       S:=' '+S+' ';
     end;
   FSkipRoundBrackets:=false;
+  ElC:=El.ClassType;
+  if El.B is TJSBinaryExpression then
+    if (El.B.ClassType=ElC)
+        and ((ElC=TJSLogicalOrExpression)
+        or (ElC=TJSLogicalAndExpression)) then
+      FSkipRoundBrackets:=true;
+  // Note: a+(b+c) <> a+b+c  e.g. floats, 0+string
   Write(S);
   WriteJS(El.B);
   Writer.CurElement:=El;

@@ -117,7 +117,9 @@ Implementation
         (r1.signindex = r2.signindex) and
         (r1.shiftimm = r2.shiftimm) and
         (r1.addressmode = r2.addressmode) and
-        (r1.shiftmode = r2.shiftmode);
+        (r1.shiftmode = r2.shiftmode) and
+        (r1.volatility=[]) and
+        (r2.volatility=[]);
     end;
 
   function MatchInstruction(const instr: tai; const op: TCommonAsmOps; const cond: TAsmConds; const postfix: TOpPostfixes): boolean;
@@ -437,6 +439,19 @@ Implementation
 
               { finally get rid of the mov }
               taicpu(p).loadreg(0,taicpu(movp).oper[0]^.reg);
+              { Remove preindexing and postindexing for LDR in some cases.
+                For example:
+                  ldr	reg2,[reg1, xxx]!
+                  mov reg1,reg2
+                must be translated to:
+                  ldr	reg1,[reg1, xxx]
+
+                Preindexing must be removed there, since the same register is used as the base and as the target.
+                Such case is not allowed for ARM CPU and produces crash. }
+              if (taicpu(p).opcode = A_LDR) and (taicpu(p).oper[1]^.typ = top_ref)
+                and (taicpu(movp).oper[0]^.reg = taicpu(p).oper[1]^.ref^.base)
+              then
+                taicpu(p).oper[1]^.ref^.addressmode:=AM_OFFSET;
               asml.remove(movp);
               movp.free;
             end;

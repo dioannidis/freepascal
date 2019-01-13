@@ -160,7 +160,8 @@ implementation
             _no_inline('assembler');
             exit;
           end;
-        if pi_has_global_goto in current_procinfo.flags then
+        if (pi_has_global_goto in current_procinfo.flags) or
+           (pi_has_interproclabel in current_procinfo.flags) then
           begin
             _no_inline('global goto');
             exit;
@@ -183,6 +184,20 @@ implementation
             _no_inline('inherited');
             exit;
           end;
+        if pio_nested_access in procdef.implprocoptions then
+         begin
+           _no_inline('access to local from nested scope');
+           exit;
+         end;
+        { We can't support inlining for procedures that have nested
+          procedures because the nested procedures use a fixed offset
+          for accessing locals in the parent procedure (PFV) }
+        if current_procinfo.has_nestedprocs then
+          begin
+            _no_inline('nested procedures');
+            exit;
+          end;
+
         for i:=0 to procdef.paras.count-1 do
           begin
             currpara:=tparavarsym(procdef.paras[i]);
@@ -892,6 +907,18 @@ implementation
         addstatement(newstatement,entry_asmnode);
         cnodeutils.procdef_block_add_implicit_initialize_nodes(procdef,newstatement);
         addstatement(newstatement,init_asmnode);
+        if assigned(procdef.parentfpinitblock) then
+          begin
+            if assigned(tblocknode(procdef.parentfpinitblock).left) then
+              begin
+                { could be an asmn in case of a pure assembler procedure,
+                  but those shouldn't access nested variables }
+                addstatement(newstatement,procdef.parentfpinitblock);
+              end
+            else
+              procdef.parentfpinitblock.free;
+            procdef.parentfpinitblock:=nil;
+          end;
         addstatement(newstatement,bodyentrycode);
 
         if (cs_implicit_exceptions in current_settings.moduleswitches) and
@@ -1875,6 +1902,7 @@ implementation
          old_current_structdef: tabstractrecorddef;
          old_current_genericdef,
          old_current_specializedef: tstoreddef;
+         parentfpinitblock: tnode;
          old_parse_generic: boolean;
          recordtokens : boolean;
 
@@ -1987,16 +2015,10 @@ implementation
                begin
                  if assigned(tblocknode(procdef.parentfpinitblock).left) then
                    begin
-                     { could be an asmn in case of a pure assembler procedure,
-                       but those shouldn't access nested variables }
-                     if code.nodetype<>blockn then
-                       internalerror(2015122601);
-                     tblocknode(code).left:=cstatementnode.create(procdef.parentfpinitblock,tblocknode(code).left);
-                     do_typecheckpass(tblocknode(code).left);
+                     parentfpinitblock:=procdef.parentfpinitblock;
+                     do_typecheckpass(parentfpinitblock);
+                     procdef.parentfpinitblock:=parentfpinitblock;
                    end
-                 else
-                   procdef.parentfpinitblock.free;
-                 procdef.parentfpinitblock:=nil;
                end;
 
            end;
@@ -2115,19 +2137,6 @@ implementation
         { reset _FAIL as _SELF normal }
         if (pd.proctypeoption=potype_constructor) then
           tokeninfo^[_FAIL].keyword:=oldfailtokenmode;
-
-        { We can't support inlining for procedures that have nested
-          procedures because the nested procedures use a fixed offset
-          for accessing locals in the parent procedure (PFV) }
-        if current_procinfo.has_nestedprocs then
-          begin
-            if (po_inline in current_procinfo.procdef.procoptions) then
-              begin
-                Message1(parser_n_not_supported_for_inline,'nested procedures');
-                Message(parser_h_inlining_disabled);
-                exclude(current_procinfo.procdef.procoptions,po_inline);
-              end;
-          end;
 
         { When it's a nested procedure then defer the code generation,
           when back at normal function level then generate the code
@@ -2253,7 +2262,10 @@ implementation
               Consume(_SEMICOLON);
 
              { Set calling convention }
-             handle_calling_convention(pd);
+             if parse_only then
+               handle_calling_convention(pd,hcc_default_actions_intf)
+             else
+               handle_calling_convention(pd,hcc_default_actions_impl)
            end;
 
          { search for forward declarations }

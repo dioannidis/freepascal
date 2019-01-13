@@ -271,7 +271,7 @@ type
     s8bit,s16bit,s32bit,s64bit,s128bit,
     pasbool1,pasbool8,pasbool16,pasbool32,pasbool64,
     bool8bit,bool16bit,bool32bit,bool64bit,
-    uchar,uwidechar,scurrency
+    uchar,uwidechar,scurrency,customint
   );
 
   tordtypeset = set of tordtype;
@@ -425,7 +425,9 @@ type
     { the inline body of this routine is available }
     pio_has_inlininginfo,
     { inline is not possible (has assembler block, etc) }
-    pio_inline_not_possible
+    pio_inline_not_possible,
+    { a nested routine accesses a local variable from this routine }
+    pio_nested_access
   );
   timplprocoptions = set of timplprocoption;
 

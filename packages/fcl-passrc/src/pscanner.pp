@@ -26,13 +26,22 @@ unit PScanner;
   {$IF FPC_FULLVERSION<30101}
     {$define EmulateArrayInsert}
   {$endif}
+  {$define HasFS}
 {$endif}
+
+{$IFDEF NODEJS}
+  {$define HasFS}
+{$ENDIF}
 
 interface
 
 uses
   {$ifdef pas2js}
-  js, NodeJSFS, Types,
+  js,
+  {$IFDEF NODEJS}
+  NodeJSFS,
+  {$ENDIF}
+  Types,
   {$endif}
   SysUtils, Classes;
 
@@ -477,9 +486,9 @@ type
     FIncludePaths: TStringList;
     FStrictFileCase : Boolean;
   Protected
+    function FindIncludeFileName(const aFilename: string): String; virtual; abstract;
     procedure SetBaseDirectory(AValue: string); virtual;
     procedure SetStrictFileCase(AValue: Boolean); virtual;
-    Function FindIncludeFileName(const AName: string): String;
     Property IncludePaths: TStringList Read FIncludePaths;
   public
     constructor Create; virtual;
@@ -490,7 +499,9 @@ type
     Property StrictFileCase : Boolean Read FStrictFileCase Write SetStrictFileCase;
     property BaseDirectory: string read FBaseDirectory write SetBaseDirectory;
   end;
+  TBaseFileResolverClass = Class of TBaseFileResolver;
 
+{$IFDEF HASFS}
   { TFileResolver }
 
   TFileResolver = class(TBaseFileResolver)
@@ -499,6 +510,7 @@ type
     FUseStreams: Boolean;
     {$endif}
   Protected
+    Function FindIncludeFileName(const AName: string): String; override;
     Function CreateFileReader(Const AFileName : String) : TLineReader; virtual;
   Public
     function FindSourceFile(const AName: string): TLineReader; override;
@@ -507,6 +519,7 @@ type
     Property UseStreams : Boolean Read FUseStreams Write FUseStreams;
     {$endif}
   end;
+{$ENDIF}
 
   {$ifdef fpc}
   { TStreamResolver }
@@ -518,6 +531,8 @@ type
     function FindStream(const AName: string; ScanIncludes: Boolean): TStream;
     function FindStreamReader(const AName: string; ScanIncludes: Boolean): TLineReader;
     procedure SetOwnsStreams(AValue: Boolean);
+  Protected
+    function FindIncludeFileName(const aFilename: string): String; override;
   Public
     constructor Create; override;
     destructor Destroy; override;
@@ -734,6 +749,7 @@ type
     procedure SetReadOnlyModeSwitches(const AValue: TModeSwitches);
     procedure SetReadOnlyValueSwitches(const AValue: TValueSwitches);
   protected
+    function ReadIdentifier(const AParam: string): string;
     function FetchLine: boolean;
     procedure AddFile(aFilename: string); virtual;
     function GetMacroName(const Param: String): String;
@@ -1144,6 +1160,7 @@ function FilenameIsAbsolute(const TheFilename: string):boolean;
 function FilenameIsWinAbsolute(const TheFilename: string): boolean;
 function FilenameIsUnixAbsolute(const TheFilename: string): boolean;
 function IsNamedToken(Const AToken : String; Out T : TToken) : Boolean;
+Function ExtractFilenameOnly(Const AFileName : String) : String;
 
 procedure CreateMsgArgs(var MsgArgs: TMessageArgs; Args: array of {$ifdef pas2js}jsvalue{$else}const{$endif});
 function SafeFormat(const Fmt: string; Args: array of {$ifdef pas2js}jsvalue{$else}const{$endif}): string;
@@ -1158,6 +1175,13 @@ const
 Var
   SortedTokens : array of TToken;
   LowerCaseTokens  : Array[ttoken] of String;
+
+Function ExtractFilenameOnly(Const AFileName : String) : String;
+
+begin
+  Result:=ChangeFileExt(ExtractFileName(aFileName),'');
+end;
+
 
 Procedure SortTokenInfo;
 
@@ -2378,7 +2402,45 @@ begin
   FStrictFileCase:=AValue;
 end;
 
-function TBaseFileResolver.FindIncludeFileName(const AName: string): String;
+
+constructor TBaseFileResolver.Create;
+begin
+  inherited Create;
+  FIncludePaths := TStringList.Create;
+end;
+
+destructor TBaseFileResolver.Destroy;
+begin
+  FIncludePaths.Free;
+  inherited Destroy;
+end;
+
+procedure TBaseFileResolver.AddIncludePath(const APath: string);
+
+Var
+  FP : String;
+
+begin
+  if (APath='') then
+    FIncludePaths.Add('./')
+  else
+    begin
+{$IFDEF HASFS}
+    FP:=IncludeTrailingPathDelimiter(ExpandFileName(APath));
+{$ELSE}
+    FP:=APath;
+{$ENDIF}
+    FIncludePaths.Add(FP);
+    end;
+end;
+
+{$IFDEF HASFS}
+
+{ ---------------------------------------------------------------------
+  TFileResolver
+  ---------------------------------------------------------------------}
+
+function TFileResolver.FindIncludeFileName(const AName: string): String;
 
   function SearchLowUpCase(FN: string): string;
 
@@ -2432,30 +2494,6 @@ begin
     end;
 end;
 
-constructor TBaseFileResolver.Create;
-begin
-  inherited Create;
-  FIncludePaths := TStringList.Create;
-end;
-
-destructor TBaseFileResolver.Destroy;
-begin
-  FIncludePaths.Free;
-  inherited Destroy;
-end;
-
-procedure TBaseFileResolver.AddIncludePath(const APath: string);
-begin
-  if (APath='') then
-    FIncludePaths.Add('./')
-  else
-    FIncludePaths.Add(IncludeTrailingPathDelimiter(ExpandFileName(APath)));
-end;
-
-{ ---------------------------------------------------------------------
-  TFileResolver
-  ---------------------------------------------------------------------}
-
 function TFileResolver.CreateFileReader(const AFileName: String): TLineReader;
 begin
   {$ifdef HasStreams}
@@ -2494,6 +2532,7 @@ begin
       Result:=Nil;
     end;
 end;
+{$ENDIF}
 
 {$ifdef fpc}
 { TStreamResolver }
@@ -2502,6 +2541,12 @@ procedure TStreamResolver.SetOwnsStreams(AValue: Boolean);
 begin
   if FOwnsStreams=AValue then Exit;
   FOwnsStreams:=AValue;
+end;
+
+function TStreamResolver.FindIncludeFileName(const aFilename: string): String;
+begin
+  raise EFileNotFoundError.Create('TStreamResolver.FindIncludeFileName not supported '+aFilename);
+  Result:='';
 end;
 
 constructor TStreamResolver.Create;
@@ -2648,7 +2693,7 @@ begin
   // Dont' free the first element, because it is CurSourceFile
   while FIncludeStack.Count > 1 do
     begin
-    TFileResolver(FIncludeStack[1]).{$ifdef pas2js}Destroy{$else}Free{$endif};
+    TBaseFileResolver(FIncludeStack[1]).{$ifdef pas2js}Destroy{$else}Free{$endif};
     FIncludeStack.Delete(1);
     end;
   FIncludeStack.Clear;
@@ -2684,7 +2729,9 @@ begin
   FCurSourceFile := FileResolver.FindSourceFile(AFilename);
   FCurFilename := AFilename;
   AddFile(FCurFilename);
+{$IFDEF HASFS}
   FileResolver.BaseDirectory := IncludeTrailingPathDelimiter(ExtractFilePath(FCurFilename));
+{$ENDIF}
   if LogEvent(sleFile) then
     DoLog(mtInfo,nLogOpeningFile,SLogOpeningFile,[FormatPath(AFileName)],True);
 end;
@@ -3411,13 +3458,16 @@ begin
 end;
 
 procedure TPascalScanner.HandleIFDEF(const AParam: String);
+var
+  aName: String;
 begin
   PushSkipMode;
   if PPIsSkipping then
     PPSkipMode := ppSkipAll
   else
     begin
-    if IsDefined(AParam) then
+    aName:=ReadIdentifier(AParam);
+    if IsDefined(aName) then
       PPSkipMode := ppSkipElseBranch
     else
       begin
@@ -3426,20 +3476,23 @@ begin
       end;
     If LogEvent(sleConditionals) then
       if PPSkipMode=ppSkipElseBranch then
-        DoLog(mtInfo,nLogIFDefAccepted,sLogIFDefAccepted,[AParam])
+        DoLog(mtInfo,nLogIFDefAccepted,sLogIFDefAccepted,[aName])
       else
-        DoLog(mtInfo,nLogIFDefRejected,sLogIFDefRejected,[AParam]);
+        DoLog(mtInfo,nLogIFDefRejected,sLogIFDefRejected,[aName]);
     end;
 end;
 
 procedure TPascalScanner.HandleIFNDEF(const AParam: String);
+var
+  aName: String;
 begin
   PushSkipMode;
   if PPIsSkipping then
     PPSkipMode := ppSkipAll
   else
     begin
-    if IsDefined(AParam) then
+    aName:=ReadIdentifier(AParam);
+    if IsDefined(aName) then
       begin
       PPSkipMode := ppSkipIfBranch;
       PPIsSkipping := true;
@@ -3448,9 +3501,9 @@ begin
       PPSkipMode := ppSkipElseBranch;
     If LogEvent(sleConditionals) then
       if PPSkipMode=ppSkipElseBranch then
-        DoLog(mtInfo,nLogIFNDefAccepted,sLogIFNDefAccepted,[AParam])
+        DoLog(mtInfo,nLogIFNDefAccepted,sLogIFNDefAccepted,[aName])
       else
-        DoLog(mtInfo,nLogIFNDefRejected,sLogIFNDefRejected,[AParam]);
+        DoLog(mtInfo,nLogIFNDefRejected,sLogIFNDefRejected,[aName]);
     end;
 end;
 
@@ -4634,6 +4687,16 @@ procedure TPascalScanner.SetReadOnlyValueSwitches(const AValue: TValueSwitches);
 begin
   if FReadOnlyValueSwitches=AValue then Exit;
   FReadOnlyValueSwitches:=AValue;
+end;
+
+function TPascalScanner.ReadIdentifier(const AParam: string): string;
+var
+  p, l: Integer;
+begin
+  p:=1;
+  l:=length(AParam);
+  while (p<=l) and (AParam[p] in IdentChars) do inc(p);
+  Result:=LeftStr(AParam,p-1);
 end;
 
 function TPascalScanner.FetchLine: boolean;

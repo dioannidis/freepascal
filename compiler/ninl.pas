@@ -1240,7 +1240,7 @@ implementation
 
         { reverse the parameters (needed to get the colon parameters in the }
         { correct order when processing write(ln)                           }
-        left := reverseparameters(tcallparanode(left));
+        reverseparameters(tcallparanode(left));
 
         if is_rwstr then
           begin
@@ -1526,7 +1526,7 @@ implementation
         valsinttype:=search_system_type('VALSINT').typedef;
 
         { reverse parameters for easier processing }
-        left := reverseparameters(tcallparanode(left));
+        reverseparameters(tcallparanode(left));
 
         { get the parameters }
         tempcode := nil;
@@ -3548,6 +3548,12 @@ implementation
                 begin
                   resultdef:=left.resultdef;
                 end;
+              in_volatile_x:
+                begin
+                  resultdef:=left.resultdef;
+                  { volatile only makes sense if the value is in memory }
+                  make_not_regable(left,[ra_addr_regable]);
+                end;
               in_assert_x_y :
                 begin
                   resultdef:=voidtype;
@@ -4037,7 +4043,8 @@ implementation
              expectloc:=LOC_VOID;
            end;
          in_aligned_x,
-         in_unaligned_x:
+         in_unaligned_x,
+         in_volatile_x:
            begin
              expectloc:=tcallparanode(left).left.expectloc;
            end;
@@ -4364,7 +4371,7 @@ implementation
 
          addstatement(newstatement,cassignmentnode.create(resultnode,hpp));
 
-         { force pass 1, so copied tries get first pass'ed as well and flags like nf_write, nf_call_unique
+         { force pass 1, so copied trees get first pass'ed as well and flags like nf_write, nf_call_unique
            get set right }
          node_reset_flags(newstatement.statement,[nf_pass1_done]);
          { firstpass it }

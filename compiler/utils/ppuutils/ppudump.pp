@@ -189,7 +189,8 @@ const
   { 98 }  'Embedded-RiscV32',
   { 99 }  'Embedded-RiscV64',
   { 100 } 'Android-AArch64',
-  { 101 } 'Android-x86-64'
+  { 101 } 'Android-x86-64',
+  { 102 } 'Haiku-x86-64'
   );
 
 const
@@ -2231,7 +2232,8 @@ const
   piopt : array[low(timplprocoption)..high(timplprocoption)] of tpiopt=(
     (mask:pio_empty; str:'IsEmpty'),
     (mask:pio_has_inlininginfo; str:'HasInliningInfo'),
-    (mask:pio_inline_not_possible; str:'InlineNotPossible')
+    (mask:pio_inline_not_possible; str:'InlineNotPossible'),
+    (mask:pio_nested_access; str:'NestedAccess')
   );
 var
   i: timplprocoption;
@@ -2937,7 +2939,7 @@ procedure readdefinitions(const s:string; ParentDef: TPpuContainerDef);
     u8bit,u16bit,u32bit,u64bit,u128bit,
     s8bit,s16bit,s32bit,s64bit,s128bit,
     bool8bit,bool16bit,bool32bit,bool64bit,
-    uchar,uwidechar,scurrency
+    uchar,uwidechar,scurrency,customint
   ); }
 
 { type tobjecttyp is in symconst unit }
@@ -3145,6 +3147,12 @@ begin
                    orddef.OrdType:=otCurrency;
                    orddef.Size:=8;
                  end;
+               customint:
+                 begin
+                   writeln('customint');
+                   orddef.OrdType:=otSint;
+                   orddef.Size:=sizeof(ASizeInt);
+                 end
                else
                  WriteWarning('Invalid base type: ' + IntToStr(b));
              end;
