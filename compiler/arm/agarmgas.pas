@@ -94,7 +94,9 @@ unit agarmgas;
       begin
         inherited;
         InstrWriter := TArmInstrWriter.create(self);
+{$ifndef llvm}
         if GenerateThumb2Code then
+{$endif}
           TArmInstrWriter(InstrWriter).unified_syntax:=true;
       end;
 
@@ -102,8 +104,6 @@ unit agarmgas;
     function TArmGNUAssembler.MakeCmdLine: TCmdStr;
       begin
         result:=inherited MakeCmdLine;
-        if tf_section_threadvars in target_info.flags then
-          result:='-mtls-dialect=gnu '+result;
         if (current_settings.fputype = fpu_soft) then
           result:='-mfpu=softvfp '+result;
         if (current_settings.fputype = fpu_vfpv2) then
@@ -207,6 +207,8 @@ unit agarmgas;
                        s:=s+', rrx'
                      else if shiftmode <> SM_None then
                        s:=s+', '+gas_shiftmode2str[shiftmode]+' #'+tostr(shiftimm);
+                     if offset<>0 then
+                       Internalerror(2019012601);
                   end
                 else if offset<>0 then
                   s:=s+', #'+tostr(offset);

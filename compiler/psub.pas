@@ -297,11 +297,6 @@ implementation
                 include(current_procinfo.flags,pi_needs_implicit_finally);
                 include(current_procinfo.flags,pi_do_call);
               end;
-            if (tparavarsym(p).varspez in [vs_value,vs_out]) and
-               (cs_create_pic in current_settings.moduleswitches) and
-               (tf_pic_uses_got in target_info.flags) and
-               is_rtti_managed_type(tparavarsym(p).vardef) then
-              include(current_procinfo.flags,pi_needs_got);
           end;
       end;
 
@@ -316,10 +311,6 @@ implementation
           begin
             include(current_procinfo.flags,pi_needs_implicit_finally);
             include(current_procinfo.flags,pi_do_call);
-            if is_rtti_managed_type(tlocalvarsym(p).vardef) and
-              (cs_create_pic in current_settings.moduleswitches) and
-              (tf_pic_uses_got in target_info.flags) then
-              include(current_procinfo.flags,pi_needs_got);
           end;
       end;
 
@@ -1379,6 +1370,7 @@ implementation
         if (cs_opt_autoinline in current_settings.optimizerswitches) and
            { inlining not turned off? }
            (cs_do_inline in current_settings.localswitches) and
+           not(po_noinline in procdef.procoptions) and
            { no inlining yet? }
            not(procdef.has_inlininginfo) and not(has_nestedprocs) and
             not(procdef.proctypeoption in [potype_proginit,potype_unitinit,potype_unitfinalize,potype_constructor,
@@ -2370,7 +2362,14 @@ implementation
                  if (not pd.forwarddef) and
                     (pd.hasforward) and
                     (proc_get_importname(pd)<>'') then
-                   call_through_new_name(pd,proc_get_importname(pd))
+                   begin
+                     { we cannot handle the callee-side of variadic functions (and
+                       even if we could, e.g. LLVM cannot call through to something
+                       else in that case) }
+                     if is_c_variadic(pd) then
+                       Message1(parse_e_callthrough_varargs,pd.fullprocname(false));
+                     call_through_new_name(pd,proc_get_importname(pd));
+                   end
                  else
 {$endif cpuhighleveltarget}
                    begin

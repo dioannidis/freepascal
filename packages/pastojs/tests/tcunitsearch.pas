@@ -135,16 +135,20 @@ type
 
   TTestCLI_UnitSearch = class(TCustomTestCLI)
   published
+    procedure TestUS_CreateRelativePath;
+
     procedure TestUS_Program;
     procedure TestUS_UsesEmptyFileFail;
     procedure TestUS_Program_o;
     procedure TestUS_Program_FU;
     procedure TestUS_Program_FU_o;
     procedure TestUS_Program_FE_o;
+    procedure TestUS_IncludeSameDir;
 
     procedure TestUS_UsesInFile;
     procedure TestUS_UsesInFile_Duplicate;
     procedure TestUS_UsesInFile_IndirectDuplicate;
+    procedure TestUS_UsesInFile_WorkNotEqProgDir;
   end;
 
 function LinesToStr(const Lines: array of string): string;
@@ -584,6 +588,49 @@ end;
 
 { TTestCLI_UnitSearch }
 
+procedure TTestCLI_UnitSearch.TestUS_CreateRelativePath;
+
+  procedure DoTest(Filename, BaseDirectory, Expected: string;
+    UsePointDirectory: boolean = false);
+  var
+    Actual: String;
+  begin
+    ForcePathDelims(Filename);
+    ForcePathDelims(BaseDirectory);
+    ForcePathDelims(Expected);
+    if not TryCreateRelativePath(Filename,BaseDirectory,UsePointDirectory,true,Actual) then
+      Actual:=Filename;
+    AssertEquals('TryCreateRelativePath(File='+Filename+',Base='+BaseDirectory+')',
+      Expected,Actual);
+  end;
+
+begin
+  DoTest('/a','/a','');
+  DoTest('/a','/a','.',true);
+  DoTest('/a','/a/','');
+  DoTest('/a/b','/a/b','');
+  DoTest('/a/b','/a/b/','');
+  DoTest('/a','/a/','');
+  DoTest('/a','','/a');
+  DoTest('/a/b','/a','b');
+  DoTest('/a/b','/a/','b');
+  DoTest('/a/b','/a//','b');
+  DoTest('/a','/a/b','..');
+  DoTest('/a','/a/b/','..');
+  DoTest('/a','/a/b//','..');
+  DoTest('/a/','/a/b','..');
+  DoTest('/a','/a/b/c','../..');
+  DoTest('/a','/a/b//c','../..');
+  DoTest('/a','/a//b/c','../..');
+  DoTest('/a','/a//b/c/','../..');
+  DoTest('/a','/b','/a');
+  DoTest('~/bin','/','~/bin');
+  DoTest('$(HOME)/bin','/','$(HOME)/bin');
+  {$IFDEF MSWindows}
+  DoTest('D:\a\b\c.pas','D:\a\d\','..\b\c.pas');
+  {$ENDIF}
+end;
+
 procedure TTestCLI_UnitSearch.TestUS_Program;
 begin
   AddUnit('system.pp',[''],['']);
@@ -649,6 +696,27 @@ begin
   AssertNotNull('foo.js not found',FindFile('foo.js'));
 end;
 
+procedure TTestCLI_UnitSearch.TestUS_IncludeSameDir;
+begin
+  AddUnit('system.pp',[''],['']);
+  AddFile('sub/defines.inc',[
+    '{$Define foo}',
+    '']);
+  AddUnit('sub/unit1.pas',
+  ['{$I defines.inc}',
+   '{$ifdef foo}',
+   'var a: longint;',
+   '{$endif}'],
+  ['']);
+  AddFile('test1.pas',[
+    'uses unit1;',
+    'begin',
+    '  a:=3;',
+    'end.']);
+  AddDir('lib');
+  Compile(['test1.pas','-Fusub','-FElib','-ofoo.js']);
+end;
+
 procedure TTestCLI_UnitSearch.TestUS_UsesInFile;
 begin
   AddUnit('system.pp',[''],['']);
@@ -705,6 +773,22 @@ begin
     'end.']);
   Compile(['test1.pas','-Jc'],ExitCodeSyntaxError);
   AssertEquals('ErrorMsg','Duplicate file found: "'+WorkDir+'unit1.pas" and "'+WorkDir+'sub/unit1.pas"',ErrorMsg);
+end;
+
+procedure TTestCLI_UnitSearch.TestUS_UsesInFile_WorkNotEqProgDir;
+begin
+  AddUnit('system.pp',[''],['']);
+  AddUnit('sub/unit2.pas',
+  ['var a: longint;'],
+  ['']);
+  AddUnit('sub/unit1.pas',
+  ['uses unit2;'],
+  ['']);
+  AddFile('sub/test1.pas',[
+    'uses foo in ''unit1.pas'';',
+    'begin',
+    'end.']);
+  Compile(['sub/test1.pas','-Jc']);
 end;
 
 Initialization

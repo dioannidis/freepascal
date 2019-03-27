@@ -256,8 +256,8 @@ type
     function SearchLowUpCase(var Filename: string): boolean;
     function FindCustomJSFileName(const aFilename: string): String; override;
     function FindUnitJSFileName(const aUnitFilename: string): String; override;
-    function FindUnitFileName(const aUnitname, InFilename: string; out IsForeign: boolean): String; override;
-    function FindIncludeFileName(const aFilename: string): String; override;
+    function FindUnitFileName(const aUnitname, InFilename, ModuleDir: string; out IsForeign: boolean): String; override;
+    function FindIncludeFileName(const aFilename, ModuleDir: string): String; override;
     function AddIncludePaths(const Paths: string; FromCmdLine: boolean; out ErrorMsg: string): boolean;
     function AddUnitPaths(const Paths: string; FromCmdLine: boolean; out ErrorMsg: string): boolean;
     function AddSrcUnitPaths(const Paths: string; FromCmdLine: boolean; out ErrorMsg: string): boolean;
@@ -1494,6 +1494,7 @@ procedure TPas2jsFilesCache.WriteFoldersAndSearchPaths;
 var
   i: Integer;
 begin
+  WriteFolder('working directory',GetCurrentDirPJ);
   for i:=0 to ForeignUnitPaths.Count-1 do
     WriteFolder('foreign unit path',ForeignUnitPaths[i]);
   for i:=0 to UnitPaths.Count-1 do
@@ -1805,13 +1806,15 @@ begin
   AddSrcUnitPaths(aValue,FromCmdLine,Result);
 end;
 
-function TPas2jsFilesCache.TryCreateRelativePath(const Filename, BaseDirectory: String; UsePointDirectory: boolean; out
-  RelPath: String): Boolean;
+function TPas2jsFilesCache.TryCreateRelativePath(const Filename, BaseDirectory: String;
+  UsePointDirectory: boolean; out RelPath: String): Boolean;
 begin
-  Result:=Pas2jsFileUtils.TryCreateRelativePath(Filename, BaseDirectory, UsePointDirectory, RelPath);
+  Result:=Pas2jsFileUtils.TryCreateRelativePath(Filename, BaseDirectory,
+    UsePointDirectory, true, RelPath);
 end;
 
-function TPas2jsFilesCache.FindIncludeFileName(const aFilename: string): String;
+function TPas2jsFilesCache.FindIncludeFileName(const aFilename,
+  ModuleDir: string): String;
 
   function SearchCasedInIncPath(const Filename: string): string;
   var
@@ -1819,9 +1822,9 @@ function TPas2jsFilesCache.FindIncludeFileName(const aFilename: string): String;
   begin
     // file name is relative
     // first search in the same directory as the unit
-    if BaseDirectory<>'' then
+    if ModuleDir<>'' then
       begin
-      Result:=BaseDirectory+Filename;
+      Result:=IncludeTrailingPathDelimiter(ModuleDir)+Filename;
       if SearchLowUpCase(Result) then exit;
       end;
     // then search in include path
@@ -1888,7 +1891,8 @@ begin
 end;
 
 
-function TPas2jsFilesCache.FindUnitFileName(const aUnitname, InFilename: string; out IsForeign: boolean): String;
+function TPas2jsFilesCache.FindUnitFileName(const aUnitname, InFilename,
+  ModuleDir: string; out IsForeign: boolean): String;
 var
   SearchedDirs: TStringList;
 
@@ -1924,7 +1928,7 @@ begin
         if SearchLowUpCase(Result) then exit;
       end else
       begin
-        Result:=ResolveDots(BaseDirectory+Result);
+        Result:=ResolveDots(ModuleDir+Result);
         if SearchLowUpCase(Result) then exit;
       end;
       exit('');
@@ -1938,6 +1942,10 @@ begin
         IsForeign:=true;
         exit;
       end;
+
+    // then in ModuleDir
+    IsForeign:=false;
+    if SearchInDir(ModuleDir,Result) then exit;
 
     // then in BaseDirectory
     IsForeign:=false;

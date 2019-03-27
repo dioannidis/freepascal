@@ -256,6 +256,8 @@ implementation
 
                           if is_open_array(para.vardef) or is_array_of_const(para.vardef) then
                             write_rtti_reference(tcb,tarraydef(para.vardef).elementdef,fullrtti)
+                          else if para.vardef=cformaltype then
+                            write_rtti_reference(tcb,nil,fullrtti)
                           else
                             write_rtti_reference(tcb,para.vardef,fullrtti);
                           write_param_flag(tcb,para);
@@ -1395,6 +1397,8 @@ implementation
                { write param type }
                if is_open_array(parasym.vardef) or is_array_of_const(parasym.vardef) then
                  write_rtti_reference(tcb,tarraydef(parasym.vardef).elementdef,fullrtti)
+               else if parasym.vardef=cformaltype then
+                 write_rtti_reference(tcb,nil,fullrtti)
                else
                  write_rtti_reference(tcb,parasym.vardef,fullrtti);
                { write name of current parameter }
@@ -1442,6 +1446,8 @@ implementation
                  begin
                    if is_open_array(tparavarsym(def.paras[i]).vardef) or is_array_of_const(tparavarsym(def.paras[i]).vardef) then
                      write_rtti_reference(tcb,tarraydef(tparavarsym(def.paras[i]).vardef).elementdef,fullrtti)
+                   else if tparavarsym(def.paras[i]).vardef=cformaltype then
+                     write_rtti_reference(tcb,nil,fullrtti)
                    else
                      write_rtti_reference(tcb,tparavarsym(def.paras[i]).vardef,fullrtti);
                  end;
@@ -2022,9 +2028,6 @@ implementation
       begin
         s:=def.rtti_mangledname(rt)+suffix;
         result:=current_asmdata.RefAsmSymbol(s,AT_DATA,indirect);
-        if (cs_create_pic in current_settings.moduleswitches) and
-           assigned(current_procinfo) then
-          include(current_procinfo.flags,pi_needs_got);
         if def.owner.moduleid<>current_module.moduleid then
           current_module.add_extern_asmsym(s,AB_EXTERNAL,AT_DATA);
       end;

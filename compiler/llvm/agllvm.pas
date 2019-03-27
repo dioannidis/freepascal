@@ -210,9 +210,9 @@ implementation
               { escape dollars }
               '$':
                  result:=result+'$$';
-              { ^ is used as placeholder for a single dollar (reference to
+              { ` is used as placeholder for a single dollar (reference to
                  argument to the inline assembly) }
-              '^':
+              '`':
                  result:=result+'$';
               #0..#31,
               #127..#255,
@@ -979,6 +979,8 @@ implementation
             writer.AsmWrite(' returns_twice');
           if po_inline in pd.procoptions then
             writer.AsmWrite(' inlinehint');
+          if po_noinline in pd.procoptions then
+            writer.AsmWrite(' noinline');
           { ensure that functions that happen to have the same name as a
             standard C library function, but which are implemented in Pascal,
             are not considered to have the same semantics as the C function with

@@ -380,6 +380,9 @@ unit i_linux;
             name         : 'Linux for x86-64';
             shortname    : 'Linux';
             flags        : [tf_smartlink_sections,tf_needs_symbol_size,tf_needs_dwarf_cfi,
+{$ifdef tls_threadvars}
+                            tf_section_threadvars,
+{$endif tls_threadvars}
                             tf_library_needs_pic,tf_needs_symbol_type,tf_files_case_sensitive,
                             tf_has_winlike_resources,tf_safecall_exceptions,tf_safecall_clearstack];
             cpu          : cpu_x86_64;
@@ -496,13 +499,13 @@ unit i_linux;
                 coalescealign   : 0;
                 coalescealignskipmax: 0;
                 constalignmin   : 4;
-                constalignmax   : 8;
+                constalignmax   : 16;
                 varalignmin     : 4;
-                varalignmax     : 8;
+                varalignmax     : 16;
                 localalignmin   : 4;
                 localalignmax   : 8;
                 recordalignmin  : 0;
-                recordalignmax  : 8;
+                recordalignmax  : 16;
                 maxCrecordalign : 8
               );
             first_parm_offset : 92;
@@ -639,13 +642,13 @@ unit i_linux;
                 coalescealign   : 0;
                 coalescealignskipmax: 0;
                 constalignmin   : 0;
-                constalignmax   : 8;
+                constalignmax   : 16;
                 varalignmin     : 0;
-                varalignmax     : 8;
+                varalignmax     : 16;
                 localalignmin   : 4;
                 localalignmax   : 8;
                 recordalignmin  : 0;
-                recordalignmax  : 8;
+                recordalignmax  : 16;
                 maxCrecordalign : 8
               );
             first_parm_offset : 8;
@@ -712,13 +715,13 @@ unit i_linux;
                 coalescealign   : 0;
                 coalescealignskipmax: 0;
                 constalignmin   : 0;
-                constalignmax   : 8;
+                constalignmax   : 16;
                 varalignmin     : 0;
-                varalignmax     : 8;
+                varalignmax     : 16;
                 localalignmin   : 4;
                 localalignmax   : 8;
                 recordalignmin  : 0;
-                recordalignmax  : 8;
+                recordalignmax  : 16;
                 maxCrecordalign : 8
               );
             first_parm_offset : 8;
@@ -782,13 +785,13 @@ unit i_linux;
                 coalescealign   : 0;
                 coalescealignskipmax: 0;
                 constalignmin   : 0;
-                constalignmax   : 4;
+                constalignmax   : 16;
                 varalignmin     : 0;
-                varalignmax     : 4;
+                varalignmax     : 16;
                 localalignmin   : 4;
                 localalignmax   : 8;
                 recordalignmin  : 0;
-                recordalignmax  : 4;
+                recordalignmax  : 16;
                 maxCrecordalign : 4
               );
             first_parm_offset : 8;
@@ -850,13 +853,13 @@ unit i_linux;
                 coalescealign   : 0;
                 coalescealignskipmax: 0;
                 constalignmin   : 0;
-                constalignmax   : 4;
+                constalignmax   : 16;
                 varalignmin     : 0;
-                varalignmax     : 4;
+                varalignmax     : 16;
                 localalignmin   : 4;
                 localalignmax   : 4;
                 recordalignmin  : 0;
-                recordalignmax  : 4;
+                recordalignmax  : 16;
                 maxCrecordalign : 4
               );
             first_parm_offset : 8;

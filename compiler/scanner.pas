@@ -572,13 +572,15 @@ implementation
            { Default to intel assembler for delphi/tp7 on i386/i8086 }
            if (m_delphi in current_settings.modeswitches) or
               (m_tp7 in current_settings.modeswitches) then
+             begin
 {$ifdef i8086}
-             current_settings.asmmode:=asmmode_i8086_intel;
+               current_settings.asmmode:=asmmode_i8086_intel;
 {$else i8086}
-             current_settings.asmmode:=asmmode_i386_intel;
+               current_settings.asmmode:=asmmode_i386_intel;
 {$endif i8086}
-           if changeinit then
-             init_settings.asmmode:=current_settings.asmmode;
+               if changeinit then
+                 init_settings.asmmode:=current_settings.asmmode;
+             end;
 {$endif i386 or i8086}
 
            { Exception support explicitly turned on (mainly for macpas, to }
@@ -3831,14 +3833,14 @@ type
         valuedescr: String;
       begin
         if assigned(preprocstack) and
-           (preprocstack.typ in [pp_if,pp_elseif]) then
+           (preprocstack.typ in [pp_if,pp_ifdef,pp_ifndef,pp_elseif]) then
          begin
            { when the branch is accepted we use pp_elseif so we know that
              all the next branches need to be rejected. when this branch is still
              not accepted then leave it at pp_if }
            if (preprocstack.typ=pp_elseif) then
              preprocstack.accept:=false
-           else if (preprocstack.typ=pp_if) and preprocstack.accept then
+           else if (preprocstack.typ in [pp_if,pp_ifdef,pp_ifndef]) and preprocstack.accept then
                begin
                  preprocstack.accept:=false;
                  preprocstack.typ:=pp_elseif;

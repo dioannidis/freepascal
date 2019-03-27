@@ -2338,6 +2338,7 @@ ifdef CLEAN_FILES
 	-$(DEL) $(CLEAN_FILES)
 endif
 	-$(DELTREE) units
+	-$(DELTREE) bin
 	-$(DEL) *$(OEXT) *$(PPUEXT) *$(RSTEXT) *$(ASMEXT) *$(STATICLIBEXT) *$(SHAREDLIBEXT) *$(PPLEXT)
 ifneq ($(PPUEXT),.ppu)
 	-$(DEL) *.o *.ppu *.a
@@ -2554,8 +2555,8 @@ ppulogs : $(PPULOGLIST)
 vpath %.ppu $(ALLPPUDIRS)
 vpath %.log-ppu $(ALLPPUDIRS)
 vpath %.rm-log-ppu $(ALLPPUDIRS)
-%.log-ppu : %.ppu ../compiler/utils/ppudump$(EXEEXT)
-	..$(PATHSEP)compiler$(PATHSEP)utils$(PATHSEP)ppudump -VA -M $< > $@
+%.log-ppu : %.ppu
+	ppudump -VA -M $< > $@
 %.rm-log-ppu : %.ppu ../compiler/utils/ppudump$(EXEEXT)
 	-$(RMPROG) $<
 ../compiler/utils/ppudump$(EXEEXT):

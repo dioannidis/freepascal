@@ -18,7 +18,10 @@ begin
     P.Directory:=ADirectory;
 {$endif ALLPACKAGES}
     P.Version:='3.3.1';
-    P.OSes := [beos,haiku,freebsd,darwin,iphonesim,solaris,netbsd,openbsd,linux,win32,win64,wince,aix,amiga,aros,morphos,dragonfly];
+    P.OSes := [beos,haiku,freebsd,darwin,iphonesim,solaris,netbsd,openbsd,linux,win32,win64,wince,aix,amiga,aros,morphos,dragonfly,android];
+    if Defaults.CPU=jvm then
+      P.OSes := P.OSes - [java,android];
+
     P.Dependencies.Add('fcl-base');
     P.Dependencies.Add('fcl-db');
     P.Dependencies.Add('fcl-xml');
@@ -45,6 +48,7 @@ begin
     P.SourcePath.Add('src/webdata');
     P.SourcePath.Add('src/jsonrpc');
     P.SourcePath.Add('src/hpack');
+    P.SourcePath.Add('src/restbridge');
 
     T:=P.Targets.AddUnit('httpdefs.pp');
     T.ResourceStrings:=true;
@@ -289,6 +293,98 @@ begin
     With T.Dependencies do  
       begin
       AddUnit('uhpackimp');
+      end;
+    
+    T:=P.Targets.AddUnit('sqldbrestconst.pp');
+    T.ResourceStrings:=true;
+    
+    T:=P.Targets.AddUnit('sqldbrestschema.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestio.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestconst');
+      AddUnit('sqldbrestschema');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestdata.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestconst');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestio');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestauth.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestconst');
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestschema');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestjson.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestbridge.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestdata');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestcds.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestcsv.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestxml.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestado.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestio');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestini.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestbridge');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestauthini.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestauth');
+      AddUnit('sqldbrestschema');
+      AddUnit('sqldbrestconst');
+      end;
+    T:=P.Targets.AddUnit('sqldbrestmodule.pp');
+    With T.Dependencies do  
+      begin
+      AddUnit('sqldbrestbridge');
+      AddUnit('sqldbrestconst');
       end;
     
 {$ifndef ALLPACKAGES}
