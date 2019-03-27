@@ -2,7 +2,7 @@
 
 var rtl = {
 
-  version: 10301,
+  version: 10501,
 
   quiet: false,
   debug_load_units: false,
@@ -25,6 +25,8 @@ var rtl = {
   checkVersion: function(v){
     if (rtl.version != v) throw "expected rtl version "+v+", but found "+rtl.version;
   },
+
+  hiInt: Math.pow(2,53),
 
   hasString: function(s){
     return rtl.isString(s) && (s.length>0);
@@ -279,12 +281,16 @@ var rtl = {
       // if root is a "function" then c.$ancestor === c.__proto__, Object.getPrototypeOf(c) returns the root
     } else {
       c = {};
-      c.$create = function(fnname,args){
+      c.$create = function(fn,args){
         if (args == undefined) args = [];
         var o = Object.create(this);
         o.$init();
         try{
-          o[fnname].apply(o,args);
+          if (typeof(fn)==="string"){
+            o[fn].apply(o,args);
+          } else {
+            fn.apply(o,args);
+          };
           o.AfterConstruction();
         } catch($e){
           // do not call BeforeDestruction
@@ -308,17 +314,21 @@ var rtl = {
     // If newinstancefnname is given, use that function to create the new object.
     // If exist call BeforeDestruction and AfterConstruction.
     var c = Object.create(ancestor);
-    c.$create = function(fnname,args){
+    c.$create = function(fn,args){
       if (args == undefined) args = [];
       var o = null;
       if (newinstancefnname.length>0){
-        o = this[newinstancefnname](fnname,args);
+        o = this[newinstancefnname](fn,args);
       } else {
         o = Object.create(this);
       }
       if (o.$init) o.$init();
       try{
-        o[fnname].apply(o,args);
+        if (typeof(fn)==="string"){
+          o[fn].apply(o,args);
+        } else {
+          fn.apply(o,args);
+        };
         if (o.AfterConstruction) o.AfterConstruction();
       } catch($e){
         // do not call BeforeDestruction
@@ -336,21 +346,47 @@ var rtl = {
     rtl.initClass(c,parent,name,initfn);
   },
 
+  createHelper: function(parent,name,ancestor,initfn){
+    // create a helper,
+    // ancestor must be null or a helper,
+    var c = null;
+    if (ancestor != null){
+      c = Object.create(ancestor);
+      c.$ancestor = ancestor;
+      // c.$ancestor === Object.getPrototypeOf(c)
+    } else {
+      c = {};
+    };
+    parent[name] = c;
+    c.$class = c; // Note: o.$class === Object.getPrototypeOf(o)
+    c.$classname = name;
+    parent = rtl.initStruct(c,parent,name);
+    c.$fullname = parent.$name+'.'+name;
+    // rtti
+    var t = c.$module.$rtti.$Helper(c.$name,{ "helper": c });
+    c.$rtti = t;
+    if (rtl.isObject(ancestor)) t.ancestor = ancestor.$rtti;
+    if (!t.ancestor) t.ancestor = null;
+    // init members
+    initfn.call(c);
+  },
+
   tObjectDestroy: "Destroy",
 
   free: function(obj,name){
-    if (obj[name]==null) return;
+    if (obj[name]==null) return null;
     obj[name].$destroy(rtl.tObjectDestroy);
     obj[name]=null;
   },
 
   freeLoc: function(obj){
-    if (obj==null) return;
+    if (obj==null) return null;
     obj.$destroy(rtl.tObjectDestroy);
     return null;
   },
 
   recNewT: function(parent,name,initfn,full){
+    // create new record type
     var t = {};
     if (parent) parent[name] = t;
     function hide(prop){
@@ -408,6 +444,8 @@ var rtl = {
   EInvalidCast: null,
   EAbstractError: null,
   ERangeError: null,
+  EIntOverflow: null,
+  EPropWriteOnly: null,
 
   raiseE: function(typename){
     var t = rtl[typename];
@@ -691,6 +729,12 @@ var rtl = {
   checkMethodCall: function(obj,type){
     if (rtl.isObject(obj) && rtl.is(obj,type)) return;
     rtl.raiseE("EInvalidCast");
+  },
+
+  oc: function(i){
+    // overflow check integer
+    if ((Math.floor(i)===i) && (i>=-0x1fffffffffffff) && (i<=0x1fffffffffffff)) return i;
+    rtl.raiseE('EIntOverflow');
   },
 
   rc: function(i,minval,maxval){
@@ -1023,6 +1067,47 @@ var rtl = {
     return 0;
   },
 
+  and: function(a,b){
+    var hi = 0x80000000;
+    var low = 0x7fffffff;
+    var h = (a / hi) & (b / hi);
+    var l = (a & low) & (b & low);
+    return h*hi + l;
+  },
+
+  or: function(a,b){
+    var hi = 0x80000000;
+    var low = 0x7fffffff;
+    var h = (a / hi) | (b / hi);
+    var l = (a & low) | (b & low);
+    return h*hi + l;
+  },
+
+  xor: function(a,b){
+    var hi = 0x80000000;
+    var low = 0x7fffffff;
+    var h = (a / hi) ^ (b / hi);
+    var l = (a & low) ^ (b & low);
+    return h*hi + l;
+  },
+
+  shr: function(a,b){
+    if (a<0) a += rtl.hiInt;
+    if (a<0x80000000) return a >> b;
+    if (b<=0) return a;
+    if (b>54) return 0;
+    return Math.floor(a / Math.pow(2,b));
+  },
+
+  shl: function(a,b){
+    if (a<0) a += rtl.hiInt;
+    if (b<=0) return a;
+    if (b>54) return 0;
+    var r = a * Math.pow(2,b);
+    if (r <= rtl.hiInt) return r;
+    return r % rtl.hiInt;
+  },
+
   initRTTI: function(){
     if (rtl.debug_rtti) rtl.debug('initRTTI');
 
@@ -1155,7 +1240,8 @@ var rtl = {
     newBaseTI("tTypeInfoRecord",12 /* tkRecord */,rtl.tTypeInfoStruct);
     newBaseTI("tTypeInfoClass",13 /* tkClass */,rtl.tTypeInfoStruct);
     newBaseTI("tTypeInfoClassRef",14 /* tkClassRef */);
-    newBaseTI("tTypeInfoInterface",15 /* tkInterface */,rtl.tTypeInfoStruct);
+    newBaseTI("tTypeInfoInterface",18 /* tkInterface */,rtl.tTypeInfoStruct);
+    newBaseTI("tTypeInfoHelper",19 /* tkHelper */,rtl.tTypeInfoStruct);
   },
 
   tSectionRTTI: {
@@ -1205,7 +1291,8 @@ var rtl = {
     $Class: function(name,o){ return this.$Scope(name,rtl.tTypeInfoClass,o); },
     $ClassRef: function(name,o){ return this.$inherited(name,rtl.tTypeInfoClassRef,o); },
     $Pointer: function(name,o){ return this.$inherited(name,rtl.tTypeInfoPointer,o); },
-    $Interface: function(name,o){ return this.$Scope(name,rtl.tTypeInfoInterface,o); }
+    $Interface: function(name,o){ return this.$Scope(name,rtl.tTypeInfoInterface,o); },
+    $Helper: function(name,o){ return this.$Scope(name,rtl.tTypeInfoHelper,o); }
   },
 
   newTIParam: function(param){

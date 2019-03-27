@@ -590,6 +590,8 @@ interface
          pno_mangledname, pno_noparams);
        tprocnameoptions = set of tprocnameoption;
        tproccopytyp = (pc_normal,
+                       { everything except for hidden parameters }
+                       pc_normal_no_hidden,
                        { always creates a top-level function, removes all
                          special parameters (self, vmt, parentfp, ...) }
                        pc_bareproc,
@@ -1820,6 +1822,8 @@ implementation
 {$endif}
          generictokenbuf:=nil;
          genericdef:=nil;
+         typesymderef.reset;
+         genericdefderef.reset;
 
          { Don't register forwarddefs, they are disposed at the
            end of an type block }
@@ -2616,6 +2620,7 @@ implementation
          calcsavesize(current_settings.packenum);
          has_jumps:=false;
          basedef:=nil;
+         basedefderef.reset;
          symtable:=tenumsymtable.create(self);
       end;
 
@@ -2716,8 +2721,8 @@ implementation
             if (minval>=0) then
               sizeval:=maxval
             else
-              { don't count 0 twice }
-              sizeval:=(cutils.max(-minval,maxval)*2)-1;
+             { don't count 0 twice, but take into account that range goes from -n-1..n }
+              sizeval:=(cutils.max(-minval,maxval+1)*2)-1;
             { 256 must become 512 etc. }
             nextpowerof2(sizeval+1,power);
             result := power;
@@ -2939,8 +2944,8 @@ implementation
             if (low>=0) then
               sizeval:=high
             else
-              { don't count 0 twice }
-              sizeval:=(cutils.max(-low,high)*2)-1;
+              { don't count 0 twice, but take into account that range goes from -n-1..n }
+              sizeval:=(cutils.max(-low,high+1)*2)-1;
             { 256 must become 512 etc. }
             nextpowerof2(sizeval+1,power);
             result := power;
@@ -3127,6 +3132,7 @@ implementation
          inherited create(filedef,true);
          filetyp:=ft_text;
          typedfiledef:=nil;
+         typedfiledefderef.reset;
       end;
 
 
@@ -3355,6 +3361,7 @@ implementation
       begin
         inherited create(dt,true);
         pointeddef:=def;
+        pointeddefderef.reset;
         if df_generic in pointeddef.defoptions then
           include(defoptions,df_generic);
         if df_specialization in pointeddef.defoptions then
@@ -3605,6 +3612,7 @@ implementation
       begin
          inherited create(setdef,doregister);
          elementdef:=def;
+         elementdefderef.reset;
          setmax:=high;
          actual_setalloc:=current_settings.setalloc;
 {$if defined(cpu8bitalu) or defined(cpu16bitalu)}
@@ -3749,7 +3757,9 @@ implementation
          lowrange:=l;
          highrange:=h;
          rangedef:=def;
+         rangedefderef.reset;
          _elementdef:=nil;
+         _elementdefderef.reset;
          arrayoptions:=[];
          symtable:=tarraysymtable.create(self);
       end;
@@ -4486,6 +4496,7 @@ implementation
          if symtable.refcount=1 then
            symtable.defowner:=self;
          isunion:=false;
+         cloneddefderef.reset;
       end;
 
 
@@ -4818,6 +4829,7 @@ implementation
          proccalloption:=pocall_none;
          procoptions:=[];
          returndef:=voidtype;
+         returndefderef.reset;
          savesize:=sizeof(pint);
          callerargareasize:=0;
          calleeargareasize:=0;
@@ -5187,7 +5199,7 @@ implementation
                   pvs:=tparavarsym(parast.symlist[j]);
                   { in case of bare proc, don't copy self, vmt or framepointer
                     parameters }
-                  if (copytyp=pc_bareproc) and
+                  if (copytyp in [pc_bareproc,pc_normal_no_hidden]) and
                      (([vo_is_self,vo_is_vmt,vo_is_parentfp,vo_is_result,vo_is_funcret]*pvs.varoptions)<>[]) then
                     continue;
                   if paraprefix='' then
@@ -5284,7 +5296,10 @@ implementation
         if (side in [callerside,callbothsides]) and
            not(has_paraloc_info in [callerside,callbothsides]) then
           begin
-            callerargareasize:=paramanager.create_paraloc_info(self,callerside);
+            if not is_c_variadic(self) then
+              callerargareasize:=paramanager.create_paraloc_info(self,callerside)
+            else
+              callerargareasize:=paramanager.create_varargs_paraloc_info(self,callerside,nil);
             if has_paraloc_info in [calleeside,callbothsides] then
               has_paraloc_info:=callbothsides
             else
@@ -5293,7 +5308,10 @@ implementation
         if (side in [calleeside,callbothsides]) and
            not(has_paraloc_info in [calleeside,callbothsides]) then
           begin
-            calleeargareasize:=paramanager.create_paraloc_info(self,calleeside);
+            if not is_c_variadic(self) then
+              calleeargareasize:=paramanager.create_paraloc_info(self,calleeside)
+            else
+              callerargareasize:=paramanager.create_varargs_paraloc_info(self,calleeside,nil);
             if has_paraloc_info in [callerside,callbothsides] then
               has_paraloc_info:=callbothsides
             else
@@ -5345,8 +5363,8 @@ implementation
             begin
               p:=tparavarsym(parast.SymList[i]);
               { check if no parameter is located on the stack }
-              if is_open_array(p.vardef) or
-                 is_array_of_const(p.vardef) then
+              if (is_open_array(p.vardef) or
+                 is_array_of_const(p.vardef)) and (p.varspez=vs_value) then
                 begin
                   result:=true;
                   exit;
@@ -5617,10 +5635,13 @@ implementation
          extnumber:=$ffff;
          aliasnames:=TCmdStrList.create;
          funcretsym:=nil;
+         funcretsymderef.reset;
+         procsymderef.reset;
          forwarddef:=true;
          interfacedef:=false;
          hasforward:=false;
          struct := nil;
+         structderef.reset;
          import_dll:=nil;
          import_name:=nil;
          import_nr:=0;
@@ -6125,7 +6146,7 @@ implementation
         { don't create aliases for bare copies, nor copy the funcretsym as
           the function result parameter will be inserted again if necessary
           (e.g. if the calling convention is changed) }
-        if copytyp<>pc_bareproc then
+        if not(copytyp in [pc_bareproc,pc_normal_no_hidden]) then
           begin
             tprocdef(result).aliasnames.concatListcopy(aliasnames);
             if assigned(funcretsym) then
@@ -6738,6 +6759,10 @@ implementation
         fcurrent_dispid:=0;
         objecttype:=ot;
         childof:=nil;
+        childofderef.reset;
+        vmt_fieldderef.reset;
+        extendeddefderef.reset;
+        cloneddefderef.reset;
         if objecttype=odt_helper then
           owner.includeoption(sto_has_helper);
         symtable:=tObjectSymtable.create(self,n,current_settings.packrecords,
@@ -7788,6 +7813,7 @@ implementation
       begin
         inherited create;
         intfdef:=aintf;
+        intfdefderef.reset;
         IOffset:=-1;
         IType:=etStandard;
         NameMappings:=nil;

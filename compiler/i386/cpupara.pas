@@ -42,7 +42,7 @@ unit cpupara;
           function get_volatile_registers_mm(calloption : tproccalloption):tcpuregisterset;override;
           function get_saved_registers_int(calloption : tproccalloption):tcpuregisterarray;override;
           function create_paraloc_info(p : tabstractprocdef; side: tcallercallee):longint;override;
-          function create_varargs_paraloc_info(p : tabstractprocdef; varargspara:tvarargsparalist):longint;override;
+          function create_varargs_paraloc_info(p : tabstractprocdef; side: tcallercallee; varargspara:tvarargsparalist):longint;override;
           procedure createtempparaloc(list: TAsmList;calloption : tproccalloption;parasym : tparavarsym;can_use_final_stack_loc : boolean;var cgpara:TCGPara);override;
           function get_funcretloc(p : tabstractprocdef; side: tcallercallee; forcetempdef: tdef): TCGPara;override;
        private
@@ -447,7 +447,8 @@ unit cpupara;
             { syscall for AROS can have already a paraloc set }
             if (vo_has_explicit_paraloc in hp.varoptions) then
               begin
-                if not(vo_is_syscall_lib in hp.varoptions) then
+                { on AROS-i386, only the libbase can have explicit paraloc }
+                if not (vo_is_syscall_lib in hp.varoptions) then
                   internalerror(2016090105);
                 if p.proccalloption in pushleftright_pocalls then
                   dec(i)
@@ -466,25 +467,23 @@ unit cpupara;
             else
               begin
                 paralen:=push_size(hp.varspez,paradef,p.proccalloption);
-                { darwin/x86 requires that parameters < sizeof(aint) are sign/ }
-                { zero extended to sizeof(aint)                                }
-                if (target_info.system in [system_i386_darwin,system_i386_iphonesim]) and
-                   (side = callerside) and
-                   (paralen > 0) and
-                   (paralen < sizeof(aint)) then
-                  begin
-                    paralen:=sizeof(aint);
-                    paracgsize:=OS_SINT;
-                    paradef:=sinttype;
-                  end
-                else
-                  paracgsize:=def_cgsize(paradef);
+                paracgsize:=def_cgsize(paradef);
               end;
             hp.paraloc[side].reset;
             hp.paraloc[side].size:=paracgsize;
             hp.paraloc[side].intsize:=paralen;
             hp.paraloc[side].def:=paradef;
             hp.paraloc[side].Alignment:=paraalign;
+            { darwin/x86 requires that parameters < sizeof(aint) are sign/ }
+            { zero extended to sizeof(aint)                                }
+            if (target_info.system in [system_i386_darwin,system_i386_iphonesim]) and
+               (side = callerside) and
+               (paralen > 0) and
+               (paralen < sizeof(aint)) then
+              begin
+                paracgsize:=OS_SINT;
+                paradef:=sinttype;
+              end;
             { Copy to stack? }
             if (paracgsize=OS_NO) or
                (use_fixed_stack) then
@@ -769,15 +768,22 @@ unit cpupara;
       end;
 
 
-    function tcpuparamanager.create_varargs_paraloc_info(p : tabstractprocdef; varargspara:tvarargsparalist):longint;
+    function tcpuparamanager.create_varargs_paraloc_info(p : tabstractprocdef; side: tcallercallee; varargspara:tvarargsparalist):longint;
       var
         parasize : longint;
       begin
         parasize:=0;
         { calculate the registers for the normal parameters }
-        create_stdcall_paraloc_info(p,callerside,p.paras,parasize);
+        create_stdcall_paraloc_info(p,side,p.paras,parasize);
         { append the varargs }
-        create_stdcall_paraloc_info(p,callerside,varargspara,parasize);
+        if assigned(varargspara) then
+          begin
+            if side=callerside then
+              create_stdcall_paraloc_info(p,side,varargspara,parasize)
+            else
+              internalerror(2019021926);
+          end;
+        create_funcretloc_info(p,side);
         result:=parasize;
       end;
 

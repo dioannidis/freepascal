@@ -78,6 +78,8 @@ const
   nIllegalStateForWarnDirective = 1027;
   nErrIncludeLimitReached = 1028;
   nMisplacedGlobalCompilerSwitch = 1029;
+  nLogMacroXSetToY = 1030;
+  nInvalidDispatchFieldName = 1031;
 
 // resourcestring patterns of messages
 resourcestring
@@ -112,6 +114,8 @@ resourcestring
   SIllegalStateForWarnDirective = 'Illegal state "%s" for $WARN directive';
   SErrIncludeLimitReached = 'Include file limit reached';
   SMisplacedGlobalCompilerSwitch = 'Misplaced global compiler switch, ignored';
+  SLogMacroXSetToY = 'Macro %s set to %s';
+  SInvalidDispatchFieldName = 'Invalid Dispatch field name';
 
 type
   TMessageType = (
@@ -293,9 +297,9 @@ type
     msArrayOperators,      { use Delphi compatible array operators instead of custom ones ("+") }
     msExternalClass,       { Allow external class definitions }
     msPrefixedAttributes,  { Allow attributes, disable proc modifier [] }
-    msIgnoreAttributes,    { workaround til resolver/converter supports attributes }
-    msOmitRTTI             { treat class section 'published' as 'public' and typeinfo does not work on symbols declared with this switch }
-  );
+    msOmitRTTI,            { treat class section 'published' as 'public' and typeinfo does not work on symbols declared with this switch }
+    msMultiHelpers         { off=only one helper per type, on=all }
+    );
   TModeSwitches = Set of TModeSwitch;
 
   // switches, that can be 'on' or 'off'
@@ -333,7 +337,8 @@ type
     bsMacro,
     bsScopedEnums,
     bsObjectChecks,   // check methods 'Self' and object type casts
-    bsPointerMath     // pointer arithmetic
+    bsPointerMath,    // pointer arithmetic
+    bsGoto       // support label and goto, set by {$goto on|off}
     );
   TBoolSwitches = set of TBoolSwitch;
 const
@@ -369,19 +374,25 @@ const
   bsAll = [low(TBoolSwitch)..high(TBoolSwitch)];
   bsFPCMode: TBoolSwitches = [bsPointerMath,bsWriteableConst];
   bsObjFPCMode: TBoolSwitches = [bsPointerMath,bsWriteableConst];
-  bsDelphiMode: TBoolSwitches = [bsWriteableConst];
-  bsDelphiUnicodeMode: TBoolSwitches = [bsWriteableConst];
+  bsDelphiMode: TBoolSwitches = [bsWriteableConst,bsGoto];
+  bsDelphiUnicodeMode: TBoolSwitches = [bsWriteableConst,bsGoto];
   bsMacPasMode: TBoolSwitches = [bsPointerMath,bsWriteableConst];
 
 type
   TValueSwitch = (
-    vsInterfaces
+    vsInterfaces,
+    vsDispatchField,
+    vsDispatchStrField
     );
   TValueSwitches = set of TValueSwitch;
   TValueSwitchArray = array[TValueSwitch] of string;
 const
   vsAllValueSwitches = [low(TValueSwitch)..high(TValueSwitch)];
-  DefaultVSInterfaces = 'com';
+  DefaultValueSwitches: array[TValueSwitch] of string = (
+     'com', // vsInterfaces
+     'Msg', // vsDispatchField
+     'MsgStr' // vsDispatchStrField
+     );
   DefaultMaxIncludeStackDepth = 20;
 
 type
@@ -762,6 +773,8 @@ type
     function HandleDirective(const ADirectiveText: String): TToken; virtual;
     function HandleLetterDirective(Letter: char; Enable: boolean): TToken; virtual;
     procedure HandleBoolDirective(bs: TBoolSwitch; const Param: String); virtual;
+    procedure DoHandleDirective(Sender: TObject; Directive, Param: String;
+      var Handled: boolean); virtual;
     procedure HandleIFDEF(const AParam: String);
     procedure HandleIFNDEF(const AParam: String);
     procedure HandleIFOPT(const AParam: String);
@@ -770,6 +783,7 @@ type
     procedure HandleELSE(const AParam: String);
     procedure HandleENDIF(const AParam: String);
     procedure HandleDefine(Param: String); virtual;
+    procedure HandleDispatchField(Param: String; vs: TValueSwitch); virtual;
     procedure HandleError(Param: String); virtual;
     procedure HandleMessageDirective(Param: String); virtual;
     procedure HandleIncludeFile(Param: String); virtual;
@@ -987,7 +1001,7 @@ const
     'Tab'
   );
 
-  SModeSwitchNames : array[TModeSwitch] of string{$ifdef fpc}[18]{$endif} =
+  SModeSwitchNames : array[TModeSwitch] of string{$ifdef fpc}[20]{$endif} =
   ( '', // msNone
     '', // Fpc,
     '', // Objfpc,
@@ -1036,8 +1050,8 @@ const
     'ARRAYOPERATORS',
     'EXTERNALCLASS',
     'PREFIXEDATTRIBUTES',
-    'IGNOREATTRIBUTES',
-    'OMITRTTI'
+    'OMITRTTI',
+    'MULTIHELPERS'
     );
 
   LetterSwitchNames: array['A'..'Z'] of string=(
@@ -1100,11 +1114,14 @@ const
     'Macro',
     'ScopedEnums',
     'ObjectChecks',
-    'PointerMath'
+    'PointerMath',
+    'Goto'
     );
 
   ValueSwitchNames: array[TValueSwitch] of string = (
-    'Interfaces'
+    'Interfaces', // vsInterfaces
+    'DispatchField', // vsDispatchField
+    'DispatchStrField' // vsDispatchStrField
     );
 
 const
@@ -1117,7 +1134,7 @@ const
 
 const
   // all mode switches supported by FPC
-  msAllFPCModeSwitches = [low(TModeSwitch)..High(TModeSwitch)];
+  msAllModeSwitches = [low(TModeSwitch)..High(TModeSwitch)];
 
   DelphiModeSwitches = [msDelphi,msClass,msObjpas,msResult,msStringPchar,
      msPointer2Procedure,msAutoDeref,msTPProcVar,msInitFinal,msDefaultAnsistring,
@@ -1128,7 +1145,7 @@ const
 
   DelphiUnicodeModeSwitches = delphimodeswitches + [msSystemCodePage,msDefaultUnicodestring];
 
-  // mode switches of $mode FPC, don't confuse with msAllFPCModeSwitches
+  // mode switches of $mode FPC, don't confuse with msAllModeSwitches
   FPCModeSwitches = [msFpc,msStringPchar,msNestedComment,msRepeatForward,
     msCVarSupport,msInitFinal,msHintDirective,msProperty,msDefaultInline];
   //FPCBoolSwitches bsObjectChecks
@@ -2653,6 +2670,8 @@ constructor TPascalScanner.Create(AFileResolver: TBaseFileResolver);
     Result.Duplicates:=dupError;
   end;
 
+var
+  vs: TValueSwitch;
 begin
   inherited Create;
   FFileResolver := AFileResolver;
@@ -2663,11 +2682,12 @@ begin
   FMaxIncludeStackDepth:=DefaultMaxIncludeStackDepth;
 
   FCurrentModeSwitches:=FPCModeSwitches;
-  FAllowedModeSwitches:=msAllFPCModeSwitches;
+  FAllowedModeSwitches:=msAllModeSwitches;
   FCurrentBoolSwitches:=bsFPCMode;
   FAllowedBoolSwitches:=bsAll;
   FAllowedValueSwitches:=vsAllValueSwitches;
-  FCurrentValueSwitches[vsInterfaces]:=DefaultVSInterfaces;
+  for vs in TValueSwitch do
+    FCurrentValueSwitches[vs]:=DefaultValueSwitches[vs];
 
   FConditionEval:=TCondDirectiveEvaluator.Create;
   FConditionEval.OnLog:=@OnCondEvalLog;
@@ -2729,9 +2749,9 @@ begin
   FCurSourceFile := FileResolver.FindSourceFile(AFilename);
   FCurFilename := AFilename;
   AddFile(FCurFilename);
-{$IFDEF HASFS}
+  {$IFDEF HASFS}
   FileResolver.BaseDirectory := IncludeTrailingPathDelimiter(ExtractFilePath(FCurFilename));
-{$ENDIF}
+  {$ENDIF}
   if LogEvent(sleFile) then
     DoLog(mtInfo,nLogOpeningFile,SLogOpeningFile,[FormatPath(AFileName)],True);
 end;
@@ -3269,10 +3289,8 @@ begin
       DoLog(mtWarning,nIllegalStateForWarnDirective,SIllegalStateForWarnDirective,[Identifier]);
       exit;
       end;
-    end;
-
-  if Number>=0 then
     SetWarnMsgState(Number,State);
+    end;
 end;
 
 procedure TPascalScanner.HandleDefine(Param: String);
@@ -3293,6 +3311,26 @@ begin
     Delete(MValue,1,Index+1);
     AddMacro(MName,MValue);
     end;
+end;
+
+procedure TPascalScanner.HandleDispatchField(Param: String; vs: TValueSwitch);
+var
+  NewValue: String;
+begin
+  if not (vs in AllowedValueSwitches) then
+    Error(nWarnIllegalCompilerDirectiveX,sWarnIllegalCompilerDirectiveX,[ValueSwitchNames[vs]]);
+  NewValue:=ReadIdentifier(Param);
+  if NewValue='-' then
+    NewValue:=''
+  else if not IsValidIdent(NewValue,false) then
+    DoLog(mtWarning,nInvalidDispatchFieldName,SInvalidDispatchFieldName,[]);
+  if SameText(NewValue,CurrentValueSwitch[vs]) then exit;
+  if vs in ReadOnlyValueSwitches then
+    begin
+    Error(nWarnIllegalCompilerDirectiveX,sWarnIllegalCompilerDirectiveX,[ValueSwitchNames[vs]]);
+    exit;
+    end;
+  CurrentValueSwitch[vs]:=NewValue;
 end;
 
 procedure TPascalScanner.HandleError(Param: String);
@@ -3396,9 +3434,15 @@ begin
   'OBJFPC':
     SetMode(msObjfpc,OBJFPCModeSwitches,true,bsObjFPCMode);
   'DELPHI':
+    begin
     SetMode(msDelphi,DelphiModeSwitches,true,bsDelphiMode,[bsPointerMath]);
+    SetNonToken(tkgeneric);
+    end;
   'DELPHIUNICODE':
+    begin
     SetMode(msDelphiUnicode,DelphiUnicodeModeSwitches,true,bsDelphiUnicodeMode,[bsPointerMath]);
+    SetNonToken(tkgeneric);
+    end;
   'TP':
     SetMode(msTP7,TPModeSwitches,false);
   'MACPAS':
@@ -3672,6 +3716,12 @@ begin
           DoBoolDirective(bsAssertions);
         'DEFINE':
           HandleDefine(Param);
+        'GOTO':
+          DoBoolDirective(bsGoto);
+        'DIRECTIVEFIELD':
+          HandleDispatchField(Param,vsDispatchField);
+        'DIRECTIVESTRFIELD':
+          HandleDispatchField(Param,vsDispatchStrField);
         'ERROR':
           HandleError(Param);
         'HINT':
@@ -3725,8 +3775,7 @@ begin
       end;
       end;
 
-    if Assigned(OnDirective) then
-      OnDirective(Self,Directive,Param,Handled);
+    DoHandleDirective(Self,Directive,Param,Handled);
     if (not Handled) then
       if LogEvent(sleDirective) then
         DoLog(mtWarning,nWarnIllegalCompilerDirectiveX,sWarnIllegalCompilerDirectiveX,
@@ -3786,9 +3835,16 @@ begin
     DoLog(mtWarning,nWarnIllegalCompilerDirectiveX,sWarnIllegalCompilerDirectiveX,
       [BoolSwitchNames[bs]])
   else if NewValue then
-    Include(FCurrentBoolSwitches,bs)
+    CurrentBoolSwitches:=CurrentBoolSwitches+[bs]
   else
-    Exclude(FCurrentBoolSwitches,bs);
+    CurrentBoolSwitches:=CurrentBoolSwitches-[bs];
+end;
+
+procedure TPascalScanner.DoHandleDirective(Sender: TObject; Directive,
+  Param: String; var Handled: boolean);
+begin
+  if Assigned(OnDirective) then
+    OnDirective(Self,Directive,Param,Handled);
 end;
 
 function TPascalScanner.DoFetchToken: TToken;
@@ -4508,9 +4564,24 @@ begin
 end;
 
 procedure TPascalScanner.SetCurrentBoolSwitches(const AValue: TBoolSwitches);
+var
+  OldBS, Removed, Added: TBoolSwitches;
 begin
   if FCurrentBoolSwitches=AValue then Exit;
+  OldBS:=FCurrentBoolSwitches;
   FCurrentBoolSwitches:=AValue;
+  Removed:=OldBS-FCurrentBoolSwitches;
+  Added:=FCurrentBoolSwitches-OldBS;
+  if bsGoto in Added then
+    begin
+    UnsetNonToken(tklabel);
+    UnsetNonToken(tkgoto);
+    end;
+  if bsGoto in Removed then
+    begin
+    SetNonToken(tklabel);
+    SetNonToken(tkgoto);
+    end;
 end;
 
 procedure TPascalScanner.SetCurrentModeSwitches(AValue: TModeSwitches);
@@ -4830,7 +4901,7 @@ begin
     end;
   Result:=true;
   if (not Quiet) and LogEvent(sleConditionals) then
-    DoLog(mtInfo,nLogMacroDefined,sLogMacroDefined,[aName])
+    DoLog(mtInfo,nLogMacroXSetToY,SLogMacroXSetToY,[aName,aValue])
 end;
 
 function TPascalScanner.RemoveMacro(const aName: String; Quiet: boolean

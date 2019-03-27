@@ -11,12 +11,16 @@ Var
   P : TPackage;
   T : TTarget;
   Data2IncBin : string;
+  VS: string;
 
 begin
   With Installer do
     begin
     P:=AddPackage('utils-fpcmkcfg');
     P.ShortName:='fcmk';
+    P.OSes:=AllOSes-[embedded,msdos,nativent,win16,atari,macos,palmos];
+    if Defaults.CPU=jvm then
+      P.OSes := P.OSes - [java,android];
 
     P.Author := '<various>';
     P.License := 'LGPL with modification';
@@ -27,6 +31,16 @@ begin
 
     P.Directory:=ADirectory;
     P.Version:='3.3.1';
+
+    P.Options.Add('-Sm');
+    Str(P.PackageVersion.Major, VS);
+    P.Options.Add('-dpackage_version_major:='+VS);
+    Str(P.PackageVersion.Minor, VS);
+    P.Options.Add('-dpackage_version_minor:='+VS);
+    Str(P.PackageVersion.Micro, VS);
+    P.Options.Add('-dpackage_version_micro:='+VS);
+    Str(P.PackageVersion.Build, VS);
+    P.Options.Add('-dpackage_version_build:='+VS);
 
     P.Dependencies.Add('fcl-base');
     P.Dependencies.Add('fpmkunit');
