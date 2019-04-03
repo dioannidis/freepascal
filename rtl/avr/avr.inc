@@ -96,8 +96,10 @@ function get_caller_frame(framebp:pointer;addr:pointer=nil):pointer;assembler;
 
 
 {$define FPC_SYSTEM_HAS_SPTR}
-Function Sptr : pointer;assembler;
+Function Sptr : pointer;assembler; nostackframe;
   asm
+    in r24, 0x3d
+    in r25, 0x3e
   end;
 
 

@@ -277,7 +277,10 @@ begin
 end;
 
 var
-  initialstkptr : Pointer; // external name '__stkptr';
+  initialstkptr : Pointer
+    {$ifdef CPUAVR} external name '_stack_top'
+    {$else} Pointer// __stkptr'
+    {$endif};
 {$endif FPC_HAS_FEATURE_STACKCHECK}
 
 begin
@@ -294,7 +297,7 @@ begin
 
 {$ifdef FPC_HAS_FEATURE_STACKCHECK}
   StackLength := CheckInitialStkLen(initialStkLen);
-  StackBottom := initialstkptr - StackLength;
+  StackBottom := {$ifdef CPUAVR}@{$endif}initialstkptr - StackLength;
 {$endif FPC_HAS_FEATURE_STACKCHECK}
 
 {$ifdef FPC_HAS_FEATURE_EXCEPTIONS}
