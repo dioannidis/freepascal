@@ -10,6 +10,7 @@ Changes:
 * Assembler routines for intrinsic integer math operations
 Compile cross compiler for either by opening compiler/ppcavr.lpi in Lazarus (quick compile, compiler will be created under compiler/avr/pp) or by the following command: ```make buildbase OS_TARGET=embedded CPU_TARGET=avr SUBARCH=avrxmega3 FPC=~/fpc/3.0.4/compiler/ppcx86 BINUTILSPREFIX=avr-```Adjust BINUTILSPREFIX and FPC for your specific system.
 * RTL make file modified so that targets requiring a subarch output compiled units to rtl/units/$fpctarget-$fpcsubarch.
+* Fix to make RTL stack error checking properly.
 
 This may give an error when compiling the RTL because not all the makefiles have been updated.  Change into the rtl/embedded folder, then continue to build the rtl: ```make OS_TARGET=embedded CPU_TARGET=avr SUBARCH=avrxmega3 FPC=~/fpc/avr/compiler/avr/pp BINUTILSPREFIX=avr-```
 
